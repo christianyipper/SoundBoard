@@ -18,6 +18,7 @@ mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
 cp "$BIN_PATH" "$APP_DIR/Contents/MacOS/SoundBoard"
 cp "Packaging/Info.plist" "$APP_DIR/Contents/Info.plist"
+cp "Packaging/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
 
 codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>&1 || true
 
