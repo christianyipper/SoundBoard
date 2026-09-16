@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SoundBoard}",
+            "name": "Debug SoundBoard",
+            "target": "SoundBoard",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug SoundBoard"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SoundBoard}",
+            "name": "Release SoundBoard",
+            "target": "SoundBoard",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release SoundBoard"
+        }
+    ]
+}
