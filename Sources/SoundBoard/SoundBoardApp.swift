@@ -44,7 +44,8 @@ struct SoundBoardApp: App {
             audioPlayerManager: audio,
             hotkeyBarStore: hotkeys,
             microphoneManager: microphone,
-            musicPlayerStore: musicPlayer
+            musicPlayerStore: musicPlayer,
+            settingsStore: settings
         )
     }
 
@@ -57,6 +58,7 @@ struct SoundBoardApp: App {
                 .environmentObject(shortcutManager)
                 .environmentObject(microphoneManager)
                 .environmentObject(musicPlayerStore)
+                .environmentObject(settingsStore)
                 .onAppear {
                     shortcutManager.start()
                     NSApp.activate(ignoringOtherApps: true)

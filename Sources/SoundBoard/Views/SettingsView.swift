@@ -64,7 +64,16 @@ struct SettingsView: View {
                     .pointerCursor()
                 }
 
-                Text("Press 0 to toggle the mic on/off.")
+                Picker("Hotkey Mode", selection: $settingsStore.settings.microphoneHotkeyMode) {
+                    ForEach(MicrophoneHotkeyMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(settingsStore.settings.microphoneHotkeyMode == .pushToTalk
+                    ? "Hold V to talk; release to stop."
+                    : "Press V to toggle the mic on/off.")
                     .font(DesignSystem.Typography.caption)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
             }

@@ -17,7 +17,7 @@ struct SoundTileView: View {
         audioPlayerManager.state(for: sound.id)
     }
 
-    private var assignedSlot: HotkeyBarStore.Slot? {
+    private var assignedSlot: HotkeyBarStore.KeySlot? {
         hotkeyBarStore.slot(forSoundID: sound.id)
     }
 

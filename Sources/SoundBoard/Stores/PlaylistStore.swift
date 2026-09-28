@@ -121,6 +121,19 @@ final class PlaylistStore: ObservableObject {
         return imported
     }
 
+    /// Points a playlist at a single on-disk parent folder: imports its contents the same way
+    /// `importFolderContents` does (subfolders become tabs) and marks the playlist as having a
+    /// root folder selected, so the picker is offered only once per playlist.
+    @discardableResult
+    func selectRootFolder(_ url: URL, forPlaylist playlistID: UUID) throws -> [Sound] {
+        let imported = try importFolderContents(from: [url], into: playlistID)
+        if let playlistIndex = playlists.firstIndex(where: { $0.id == playlistID }) {
+            playlists[playlistIndex].rootFolderSelected = true
+            scheduleSave()
+        }
+        return imported
+    }
+
     func renameSound(_ soundID: UUID, in playlistID: UUID, to newName: String) {
         guard let playlistIndex = playlists.firstIndex(where: { $0.id == playlistID }),
               let location = soundLocation(soundID, inPlaylistAt: playlistIndex) else { return }

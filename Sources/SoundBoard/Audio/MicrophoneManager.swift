@@ -39,6 +39,16 @@ final class MicrophoneManager: ObservableObject {
         }
     }
 
+    /// Explicit on/off, for push-to-talk (key-down starts it, key-up stops it) as opposed to
+    /// `toggle()`'s single key-down flip. Idempotent: calling with the current state is a no-op.
+    func setLive(_ shouldBeLive: Bool) {
+        if shouldBeLive {
+            start()
+        } else {
+            stop()
+        }
+    }
+
     private func start() {
         guard !isLive else { return }
         AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in

@@ -16,6 +16,9 @@ struct AppSettings: Codable, Equatable {
     var crossFadeDuration: Double
     /// Light/dark/system appearance override for the app's windows.
     var appearance: AppAppearance
+    /// Whether the fixed "V" mic hotkey toggles mic passthrough on/off, or holds it live only
+    /// while held down (push to talk).
+    var microphoneHotkeyMode: MicrophoneHotkeyMode
 
     static let `default` = AppSettings(
         fadeOutDuration: 0,
@@ -26,7 +29,7 @@ struct AppSettings: Codable, Equatable {
     )
 
     private enum CodingKeys: String, CodingKey {
-        case fadeOutDuration, volume, reverbAmount, microphoneDeviceID, crossFadeDuration, appearance
+        case fadeOutDuration, volume, reverbAmount, microphoneDeviceID, crossFadeDuration, appearance, microphoneHotkeyMode
     }
 
     init(
@@ -35,7 +38,8 @@ struct AppSettings: Codable, Equatable {
         reverbAmount: Float,
         microphoneDeviceID: String?,
         crossFadeDuration: Double,
-        appearance: AppAppearance = .system
+        appearance: AppAppearance = .system,
+        microphoneHotkeyMode: MicrophoneHotkeyMode = .toggle
     ) {
         self.fadeOutDuration = fadeOutDuration
         self.volume = volume
@@ -43,11 +47,12 @@ struct AppSettings: Codable, Equatable {
         self.microphoneDeviceID = microphoneDeviceID
         self.crossFadeDuration = crossFadeDuration
         self.appearance = appearance
+        self.microphoneHotkeyMode = microphoneHotkeyMode
     }
 
-    // Custom Codable so settings saved before crossFadeDuration/appearance existed still load
-    // correctly, defaulting new fields instead of failing decode entirely and silently resetting
-    // every other saved setting back to .default.
+    // Custom Codable so settings saved before crossFadeDuration/appearance/microphoneHotkeyMode
+    // existed still load correctly, defaulting new fields instead of failing decode entirely and
+    // silently resetting every other saved setting back to .default.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         fadeOutDuration = try container.decode(Double.self, forKey: .fadeOutDuration)
@@ -56,6 +61,21 @@ struct AppSettings: Codable, Equatable {
         microphoneDeviceID = try container.decodeIfPresent(String.self, forKey: .microphoneDeviceID)
         crossFadeDuration = try container.decodeIfPresent(Double.self, forKey: .crossFadeDuration) ?? 0
         appearance = try container.decodeIfPresent(AppAppearance.self, forKey: .appearance) ?? .system
+        microphoneHotkeyMode = try container.decodeIfPresent(MicrophoneHotkeyMode.self, forKey: .microphoneHotkeyMode) ?? .toggle
+    }
+}
+
+/// How the fixed "V" hotkey controls mic passthrough, selectable in Settings.
+enum MicrophoneHotkeyMode: String, Codable, CaseIterable, Identifiable {
+    case toggle, pushToTalk
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .toggle: return "Toggle"
+        case .pushToTalk: return "Push to Talk"
+        }
     }
 }
 

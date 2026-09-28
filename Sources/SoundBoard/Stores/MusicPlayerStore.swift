@@ -19,6 +19,10 @@ final class MusicPlayerStore: ObservableObject {
     }
     @Published private(set) var currentSoundID: UUID?
     @Published private(set) var isPlaying = false
+    /// Seconds elapsed since the current track started, for the timeline display. Reset to 0
+    /// whenever a new track starts and frozen (not decremented) on pause, since pausing cues up
+    /// a fresh track for next time rather than resuming this one.
+    @Published private(set) var elapsedTime: TimeInterval = 0
 
     private let playlistStore: PlaylistStore
     private let audioPlayerManager: AudioPlayerManager
@@ -28,6 +32,8 @@ final class MusicPlayerStore: ObservableObject {
     /// Fires shortly before the currently-playing track's audio actually ends, to kick off a
     /// crossfade into the next one. Only scheduled when the crossfade setting is on.
     private var crossFadeWorkItem: DispatchWorkItem?
+    /// When the current track's audio actually started, for computing `elapsedTime`.
+    private var trackStartDate: Date?
     private var cancellables = Set<AnyCancellable>()
 
     init(playlistStore: PlaylistStore, audioPlayerManager: AudioPlayerManager) {
@@ -44,10 +50,21 @@ final class MusicPlayerStore: ObservableObject {
                 self.advanceAndPlay()
             }
             .store(in: &cancellables)
+
+        Timer.publish(every: 0.25, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in self?.tickElapsedTime() }
+            .store(in: &cancellables)
     }
 
     var currentSound: Sound? {
         currentSoundID.flatMap(playlistStore.sound(withID:))
+    }
+
+    /// Full duration, in seconds, of the current track's audio — available once it's started
+    /// playing at least once this session.
+    var currentDuration: TimeInterval? {
+        currentSoundID.flatMap(audioPlayerManager.duration(for:))
     }
 
     /// Starts the cued track if idle, or stops the current one (fading per settings) and cues the
@@ -57,6 +74,8 @@ final class MusicPlayerStore: ObservableObject {
         cancelScheduledCrossFade()
         if isPlaying {
             isPlaying = false
+            trackStartDate = nil
+            elapsedTime = 0
             if let currentSoundID {
                 audioPlayerManager.pause(currentSoundID)
             }
@@ -64,6 +83,47 @@ final class MusicPlayerStore: ObservableObject {
             currentSoundID = soundID(atCurrentIndexOf: selectedPlaylistID)
         } else {
             play(playlistID: selectedPlaylistID)
+        }
+    }
+
+    /// Jumps to the next track in the shuffle order, preserving the current play/pause state:
+    /// plays it immediately if a track was already playing, or just cues it (silent, awaiting
+    /// Play) if playback was paused.
+    func skipToNext() {
+        guard let selectedPlaylistID else { return }
+        cancelScheduledCrossFade()
+        let wasPlaying = isPlaying
+        if isPlaying, let currentSoundID {
+            audioPlayerManager.pause(currentSoundID)
+        }
+        advanceIndex(for: selectedPlaylistID)
+        currentSoundID = soundID(atCurrentIndexOf: selectedPlaylistID)
+        if wasPlaying {
+            play(playlistID: selectedPlaylistID)
+        } else {
+            isPlaying = false
+            trackStartDate = nil
+            elapsedTime = 0
+        }
+    }
+
+    /// Jumps to the previous track in the shuffle order, preserving the current play/pause state
+    /// the same way skipToNext() does.
+    func skipToPrevious() {
+        guard let selectedPlaylistID else { return }
+        cancelScheduledCrossFade()
+        let wasPlaying = isPlaying
+        if isPlaying, let currentSoundID {
+            audioPlayerManager.pause(currentSoundID)
+        }
+        retreatIndex(for: selectedPlaylistID)
+        currentSoundID = soundID(atCurrentIndexOf: selectedPlaylistID)
+        if wasPlaying {
+            play(playlistID: selectedPlaylistID)
+        } else {
+            isPlaying = false
+            trackStartDate = nil
+            elapsedTime = 0
         }
     }
 
@@ -78,6 +138,8 @@ final class MusicPlayerStore: ObservableObject {
         }
         shuffleOrders[selectedPlaylistID] = nil
         currentIndices[selectedPlaylistID] = nil
+        trackStartDate = nil
+        elapsedTime = 0
         currentSoundID = cueFirstTrack(for: selectedPlaylistID)
     }
 
@@ -89,7 +151,14 @@ final class MusicPlayerStore: ObservableObject {
             audioPlayerManager.pause(currentSoundID)
         }
         isPlaying = false
+        trackStartDate = nil
+        elapsedTime = 0
         currentSoundID = playlistID.flatMap { cueFirstTrack(for: $0) }
+    }
+
+    private func tickElapsedTime() {
+        guard isPlaying, let trackStartDate else { return }
+        elapsedTime = Date().timeIntervalSince(trackStartDate)
     }
 
     private func play(playlistID: UUID) {
@@ -97,6 +166,8 @@ final class MusicPlayerStore: ObservableObject {
         guard let candidateID, let sound = playlistStore.sound(withID: candidateID) else { return }
         currentSoundID = candidateID
         isPlaying = true
+        trackStartDate = Date()
+        elapsedTime = 0
         audioPlayerManager.play(sound, fileURL: playlistStore.url(for: sound))
         scheduleCrossFadeIfNeeded(from: candidateID, playlistID: playlistID)
     }
@@ -135,6 +206,8 @@ final class MusicPlayerStore: ObservableObject {
         guard let nextSoundID = soundID(atCurrentIndexOf: playlistID),
               let sound = playlistStore.sound(withID: nextSoundID) else { return }
         currentSoundID = nextSoundID
+        trackStartDate = Date()
+        elapsedTime = 0
         audioPlayerManager.crossFade(from: fromSoundID, to: sound, fileURL: playlistStore.url(for: sound))
         scheduleCrossFadeIfNeeded(from: nextSoundID, playlistID: playlistID)
     }
@@ -166,6 +239,14 @@ final class MusicPlayerStore: ObservableObject {
         guard !order.isEmpty else { return }
         let next = (currentIndices[playlistID] ?? 0) + 1
         currentIndices[playlistID] = next % order.count
+    }
+
+    /// Moves to the previous position in the shuffle order, wrapping to the end.
+    private func retreatIndex(for playlistID: UUID) {
+        let order = shuffleOrder(for: playlistID)
+        guard !order.isEmpty else { return }
+        let current = currentIndices[playlistID] ?? 0
+        currentIndices[playlistID] = (current - 1 + order.count) % order.count
     }
 
     /// Returns the cached shuffle order for `playlistID`, dropping any sounds that were since
