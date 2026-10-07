@@ -182,62 +182,11 @@ final class ShortcutManagerTests: XCTestCase {
         XCTAssertEqual(audioManager.state(for: sound.id), .playing)
     }
 
-    func testArrowKeysSwitchHotkeyPresetTabsWhenMultiplePresetsExist() throws {
+    /// The hotkey preset follows the main view (Call → Goal Call), so arrow keys never switch it.
+    func testArrowKeysPassThroughWithoutSwitchingPresets() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
         let hotkeyBarStore = HotkeyBarStore(baseDirectory: tempDirectory)
-        let firstPresetID = try XCTUnwrap(hotkeyBarStore.presets.first?.id)
-        let secondPreset = hotkeyBarStore.createPreset(name: "Second")
-        hotkeyBarStore.selectPreset(firstPresetID)
-
-        let audioManager = AudioPlayerManager()
-        let manager = ShortcutManager(
-            playlistStore: store,
-            audioPlayerManager: audioManager,
-            hotkeyBarStore: hotkeyBarStore,
-            microphoneManager: MicrophoneManager(),
-            musicPlayerStore: MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager),
-            settingsStore: SettingsStore(baseDirectory: tempDirectory)
-        )
-
-        // Real arrow key events always carry .numericPad (and usually .function) from macOS
-        // itself, even with no keys held down — exercising that here is what would have caught
-        // the original bug, where requiring zero modifier flags silently broke arrow handling.
-        let arrowFlags: NSEvent.ModifierFlags = [.numericPad, .function]
-
-        let rightEvent = try XCTUnwrap(Self.keyEvent(keyCode: 124, modifierFlags: arrowFlags)) // right arrow
-        XCTAssertNil(manager.handle(rightEvent), "right arrow should be consumed when multiple presets exist")
-        XCTAssertEqual(hotkeyBarStore.selectedPresetID, secondPreset.id)
-
-        let leftEvent = try XCTUnwrap(Self.keyEvent(keyCode: 123, modifierFlags: arrowFlags)) // left arrow
-        XCTAssertNil(manager.handle(leftEvent))
-        XCTAssertEqual(hotkeyBarStore.selectedPresetID, firstPresetID)
-    }
-
-    func testCommandArrowDoesNotSwitchHotkeyPresetTabs() throws {
-        let store = PlaylistStore(baseDirectory: tempDirectory)
-        let hotkeyBarStore = HotkeyBarStore(baseDirectory: tempDirectory)
-        let firstPresetID = try XCTUnwrap(hotkeyBarStore.presets.first?.id)
-        _ = hotkeyBarStore.createPreset(name: "Second")
-        hotkeyBarStore.selectPreset(firstPresetID)
-
-        let audioManager = AudioPlayerManager()
-        let manager = ShortcutManager(
-            playlistStore: store,
-            audioPlayerManager: audioManager,
-            hotkeyBarStore: hotkeyBarStore,
-            microphoneManager: MicrophoneManager(),
-            musicPlayerStore: MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager),
-            settingsStore: SettingsStore(baseDirectory: tempDirectory)
-        )
-
-        let event = try XCTUnwrap(Self.keyEvent(keyCode: 124, modifierFlags: [.command, .numericPad, .function]))
-        XCTAssertNotNil(manager.handle(event), "cmd+arrow should propagate normally, not switch tabs")
-        XCTAssertEqual(hotkeyBarStore.selectedPresetID, firstPresetID)
-    }
-
-    func testArrowKeysPassThroughWithOnlyOneHotkeyPreset() throws {
-        let store = PlaylistStore(baseDirectory: tempDirectory)
-        let hotkeyBarStore = HotkeyBarStore(baseDirectory: tempDirectory)
+        let selectedPresetID = hotkeyBarStore.selectedPresetID
         let audioManager = AudioPlayerManager()
         let manager = ShortcutManager(
             playlistStore: store,
@@ -249,7 +198,8 @@ final class ShortcutManagerTests: XCTestCase {
         )
 
         let event = try XCTUnwrap(Self.keyEvent(keyCode: 124, modifierFlags: [.numericPad, .function])) // right arrow
-        XCTAssertNotNil(manager.handle(event), "arrow keys should propagate normally with only one preset")
+        XCTAssertNotNil(manager.handle(event), "arrow keys should propagate normally")
+        XCTAssertEqual(hotkeyBarStore.selectedPresetID, selectedPresetID)
     }
 
     private func makeManager(playlistStore: PlaylistStore, audioPlayerManager: AudioPlayerManager) -> ShortcutManager {

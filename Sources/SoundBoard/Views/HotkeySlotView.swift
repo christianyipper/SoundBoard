@@ -82,10 +82,15 @@ struct HotkeySlotView: View {
                 isRenaming = true
             }
             if assignment != nil {
-                Button("Clear", role: .destructive) {
+                Button("Clear Sound") {
                     hotkeyBarStore.clear(slot: keySlot.index)
                 }
             }
+            Divider()
+            Button("Remove Hotkey", role: .destructive) {
+                hotkeyBarStore.removeKey(at: keySlot.index)
+            }
+            .disabled(!hotkeyBarStore.canRemoveKey)
         }
         .onDrop(of: [.text], isTargeted: $isDropTargeted) { providers in
             handleDrop(providers)

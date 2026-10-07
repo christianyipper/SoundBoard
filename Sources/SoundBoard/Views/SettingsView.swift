@@ -27,6 +27,12 @@ struct SettingsView: View {
                     Slider(value: $settingsStore.settings.volume, in: 0...1)
                 }
 
+                Toggle("Match loudness across sounds", isOn: $settingsStore.settings.normalizeLoudness)
+
+                Text("Automatically evens out sounds recorded at different levels so one volume setting works for all of them.")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Reverb: \(Int(settingsStore.settings.reverbAmount))%")
                     Slider(value: $settingsStore.settings.reverbAmount, in: 0...100)

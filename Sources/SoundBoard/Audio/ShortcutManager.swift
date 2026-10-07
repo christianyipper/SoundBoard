@@ -2,8 +2,7 @@ import AppKit
 import Combine
 
 /// Installs local key-down and key-up monitors for the app's lifetime. On key-down it checks the
-/// spacebar (music player play/pause) first, then the fixed "V" mic hotkey, then left/right arrow
-/// (switches the selected hotkey preset tab, only when more than one preset exists), then the
+/// spacebar (music player play/pause) first, then the fixed "V" mic hotkey, then the
 /// selected hotkey preset's slots (plain keys 1-9/0), then every sound's custom assigned shortcut,
 /// toggling play/pause on a match. The mic hotkey's behavior depends on
 /// `settings.microphoneHotkeyMode`: "toggle" flips it on key-down; "push to talk" turns it on
@@ -14,8 +13,6 @@ import Combine
 final class ShortcutManager: ObservableObject {
     private static let spacebarKeyCode: UInt16 = 49
     private static let microphoneKeyCode: UInt16 = 9
-    private static let leftArrowKeyCode: UInt16 = 123
-    private static let rightArrowKeyCode: UInt16 = 124
 
     private let playlistStore: PlaylistStore
     private let audioPlayerManager: AudioPlayerManager
@@ -93,18 +90,6 @@ final class ShortcutManager: ObservableObject {
         }
         if hasNoModifiers, event.keyCode == Self.microphoneKeyCode {
             handleMicrophoneKeyDown()
-            return nil
-        }
-        // Arrow keys always carry the .numericPad (and often .function) modifier flag from macOS
-        // itself, even with no keys held down, so they'd never satisfy `hasNoModifiers`. Only the
-        // "real" modifier keys should block tab switching here.
-        let navigationModifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
-        if navigationModifiers.isEmpty, hotkeyBarStore.presets.count > 1, event.keyCode == Self.leftArrowKeyCode {
-            hotkeyBarStore.selectAdjacentPreset(offset: -1)
-            return nil
-        }
-        if navigationModifiers.isEmpty, hotkeyBarStore.presets.count > 1, event.keyCode == Self.rightArrowKeyCode {
-            hotkeyBarStore.selectAdjacentPreset(offset: 1)
             return nil
         }
         if hasNoModifiers, let slot = hotkeyBarStore.slot(forKeyCode: event.keyCode) {

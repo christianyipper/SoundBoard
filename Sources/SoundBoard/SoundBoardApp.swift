@@ -22,16 +22,21 @@ struct SoundBoardApp: App {
     @StateObject private var settingsStore: SettingsStore
     @StateObject private var microphoneManager: MicrophoneManager
     @StateObject private var musicPlayerStore: MusicPlayerStore
+    @StateObject private var gameStore: GameStore
+    @StateObject private var rosterStore: RosterStore
     private let shortcutManager: ShortcutManager
 
     init() {
         let store = PlaylistStore()
-        let audio = AudioPlayerManager()
+        let audio = AudioPlayerManager(
+            loudnessCache: LoudnessCache(fileURL: store.appSupportDirectory.appendingPathComponent("loudness.json"))
+        )
         let hotkeys = HotkeyBarStore(baseDirectory: store.appSupportDirectory)
         let settings = SettingsStore(baseDirectory: store.appSupportDirectory)
         let microphone = MicrophoneManager()
         let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audio)
         audio.bind(to: settings)
+        audio.bind(to: store)
         microphone.bind(to: settings)
         _playlistStore = StateObject(wrappedValue: store)
         _audioPlayerManager = StateObject(wrappedValue: audio)
@@ -39,6 +44,8 @@ struct SoundBoardApp: App {
         _settingsStore = StateObject(wrappedValue: settings)
         _microphoneManager = StateObject(wrappedValue: microphone)
         _musicPlayerStore = StateObject(wrappedValue: musicPlayer)
+        _gameStore = StateObject(wrappedValue: GameStore(baseDirectory: store.appSupportDirectory))
+        _rosterStore = StateObject(wrappedValue: RosterStore(baseDirectory: store.appSupportDirectory))
         shortcutManager = ShortcutManager(
             playlistStore: store,
             audioPlayerManager: audio,
@@ -59,6 +66,8 @@ struct SoundBoardApp: App {
                 .environmentObject(microphoneManager)
                 .environmentObject(musicPlayerStore)
                 .environmentObject(settingsStore)
+                .environmentObject(gameStore)
+                .environmentObject(rosterStore)
                 .onAppear {
                     shortcutManager.start()
                     NSApp.activate(ignoringOtherApps: true)
@@ -67,6 +76,7 @@ struct SoundBoardApp: App {
                     playlistStore.flush()
                     hotkeyBarStore.flush()
                     settingsStore.flush()
+                    gameStore.flush()
                 }
                 .preferredColorScheme(settingsStore.settings.appearance.colorScheme)
                 .tint(DesignSystem.Colors.accentPrimary)

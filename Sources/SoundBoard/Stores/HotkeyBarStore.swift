@@ -1,10 +1,11 @@
 import Foundation
 
-/// Owns the fixed 10-key hotkey rack (number row 1-5 on top, 6-0 on the bottom) shown above the
-/// sound grid, organized into user-created "presets" — independently named racks, each with its
-/// own slot titles and sound assignments, switchable via tabs. The physical key layout (which key
-/// code sits at which grid position) is fixed and shared by every preset; only slot titles and
-/// assignments vary per preset. The microphone toggle is a separate, fixed "V" hotkey handled by
+/// Owns the hotkey rack (up to ten keys, 1-9 then 0, in one row) shown above the sound grid.
+/// There are two fixed presets, each with its own slot titles and sound assignments:
+/// "Default" (used by the Files and Gamesheet views) and "Goal Call" (used by the Call view); the
+/// main view picks which one is active via `selectPreset(named:)`. Each preset shows its own
+/// number of keys (five to start), changed with "+ Key"/"- Key" or by removing a hotkey from its
+/// context menu; keys past that count are hidden and inactive. The microphone toggle is a separate, fixed "V" hotkey handled by
 /// ShortcutManager directly, independent of any preset.
 final class HotkeyBarStore: ObservableObject {
     struct KeySlot: Identifiable {
@@ -14,7 +15,7 @@ final class HotkeyBarStore: ObservableObject {
         var id: Int { index }
     }
 
-    /// Row 1: keys 1-5 (indices 0-4). Row 2: keys 6-0 (indices 5-9). Key codes are the physical ANSI keyboard codes.
+    /// Keys 1-5 (indices 0-4), then keys 6-0 (indices 5-9). Key codes are the physical ANSI keyboard codes.
     static let keySlots: [KeySlot] = [
         KeySlot(index: 0, keyCode: 18, displayKey: "1"),
         KeySlot(index: 1, keyCode: 19, displayKey: "2"),
@@ -28,9 +29,18 @@ final class HotkeyBarStore: ObservableObject {
         KeySlot(index: 9, keyCode: 29, displayKey: "0")
     ]
 
-    private static let defaultTitles = [
-        "Home Goal", "Away Goal", "Penalty", "Even Strength", "Scorer",
-        "Assist 1", "Assist 2", "End of Goal", "End of Period", "Last Minute"
+    /// Keys shown in a new preset (1-5); "+ Key" adds up to all of `keySlots`.
+    static let defaultKeyCount = 5
+    static let minimumKeyCount = 1
+
+    static let defaultPresetName = "Default"
+    static let goalCallPresetName = "Goal Call"
+    static let presetNames = [defaultPresetName, goalCallPresetName]
+
+    /// Named titles for each preset's first keys; the rest are "Slot N" until renamed.
+    private static let presetTitles: [String: [String]] = [
+        defaultPresetName: ["Home Goal", "Away Goal", "Penalty", "Even Strength", "End of Period"],
+        goalCallPresetName: ["Team Intro", "Goal", "Assist #1", "Assist #2", "Team End"]
     ]
 
     @Published private(set) var presets: [HotkeyPreset] = []
@@ -46,19 +56,32 @@ final class HotkeyBarStore: ObservableObject {
 
     init(baseDirectory: URL) {
         fileURL = baseDirectory.appendingPathComponent("hotkeys.json")
-        if let state = Self.load(from: fileURL), !state.presets.isEmpty {
-            presets = state.presets
-            let hasSelected = state.selectedPresetID.map { id in state.presets.contains { $0.id == id } } ?? false
-            selectedPresetID = hasSelected ? state.selectedPresetID : state.presets.first?.id
-        } else {
-            let defaultPreset = Self.makeDefaultPreset()
-            presets = [defaultPreset]
-            selectedPresetID = defaultPreset.id
+        let state = Self.load(from: fileURL)
+        presets = Self.fixedPresets(from: state?.presets ?? [])
+        let hasSelected = state?.selectedPresetID.map { id in presets.contains { $0.id == id } } ?? false
+        selectedPresetID = hasSelected ? state?.selectedPresetID : presets.first?.id
+    }
+
+    /// Builds the fixed presets, reusing saved ones by name. Older saves without a "Default"
+    /// preset (from when presets were user-created) use their first other-named preset for it;
+    /// any remaining user-created presets are dropped.
+    private static func fixedPresets(from saved: [HotkeyPreset]) -> [HotkeyPreset] {
+        let legacy = saved.first { !presetNames.contains($0.name) }
+        return presetNames.map { name in
+            if let preset = saved.first(where: { $0.name == name }) { return preset }
+            if name == defaultPresetName, var legacy {
+                legacy.name = name
+                return legacy
+            }
+            return HotkeyPreset(name: name, slots: initialSlots(forPreset: name))
         }
     }
 
-    private static func makeDefaultPreset() -> HotkeyPreset {
-        HotkeyPreset(name: "Default", slots: defaultTitles.map { HotkeyPreset.Slot(title: $0, assignment: nil) })
+    private static func initialSlots(forPreset name: String) -> [HotkeyPreset.Slot] {
+        let titles = presetTitles[name] ?? []
+        return blankSlots().enumerated().map { index, slot in
+            titles.indices.contains(index) ? HotkeyPreset.Slot(title: titles[index], assignment: nil) : slot
+        }
     }
 
     private static func blankSlots() -> [HotkeyPreset.Slot] {
@@ -78,50 +101,50 @@ final class HotkeyBarStore: ObservableObject {
         scheduleSave()
     }
 
-    /// Selects the preset tab immediately before/after the current one, wrapping around at the
-    /// ends. No-op with a single preset. Used by the left/right arrow key shortcuts.
-    func selectAdjacentPreset(offset: Int) {
-        guard presets.count > 1, let selectedIndex else { return }
-        let newIndex = ((selectedIndex + offset) % presets.count + presets.count) % presets.count
-        selectedPresetID = presets[newIndex].id
+    func selectPreset(named name: String) {
+        guard let preset = presets.first(where: { $0.name == name }), preset.id != selectedPresetID else { return }
+        selectPreset(preset.id)
+    }
+
+    // MARK: - Key count
+
+    /// How many keys (from 1 up) the selected preset shows and responds to.
+    var keyCount: Int {
+        guard let selectedIndex else { return 0 }
+        return min(max(presets[selectedIndex].keyCount, Self.minimumKeyCount), Self.keySlots.count)
+    }
+
+    /// Keys shown in the selected preset, in key order.
+    var visibleKeySlots: [KeySlot] {
+        Array(Self.keySlots.prefix(keyCount))
+    }
+
+    var canAddKey: Bool { selectedIndex != nil && keyCount < Self.keySlots.count }
+    var canRemoveKey: Bool { selectedIndex != nil && keyCount > Self.minimumKeyCount }
+
+    /// Shows the next key. It comes back with whatever title and sound it had when hidden.
+    func addKey() {
+        guard canAddKey, let selectedIndex else { return }
+        presets[selectedIndex].keyCount = keyCount + 1
         scheduleSave()
     }
 
-    // MARK: - Preset management
-
-    @discardableResult
-    func createPreset(name: String) -> HotkeyPreset {
-        let preset = HotkeyPreset(name: name, slots: Self.blankSlots())
-        presets.append(preset)
-        selectedPresetID = preset.id
-        scheduleSave()
-        return preset
-    }
-
-    func renamePreset(_ id: UUID, to newName: String) {
-        guard let index = presets.firstIndex(where: { $0.id == id }) else { return }
-        presets[index].name = newName
+    /// Hides the last key. Its title and sound are kept, so "+ Key" brings it back as it was.
+    func removeLastKey() {
+        guard canRemoveKey, let selectedIndex else { return }
+        presets[selectedIndex].keyCount = keyCount - 1
         scheduleSave()
     }
 
-    /// Reorders presets by moving `id` to just before `targetID`, e.g. when the user drags one
-    /// preset tab onto another in the strip.
-    func movePreset(_ id: UUID, before targetID: UUID) {
-        guard id != targetID, let fromIndex = presets.firstIndex(where: { $0.id == id }) else { return }
-        let preset = presets.remove(at: fromIndex)
-        let toIndex = presets.firstIndex(where: { $0.id == targetID }) ?? presets.count
-        presets.insert(preset, at: toIndex)
-        scheduleSave()
-    }
-
-    /// Deletes a preset. At least one preset always remains, so this is a no-op if `id` is the
-    /// only remaining preset.
-    func deletePreset(_ id: UUID) {
-        guard presets.count > 1, let index = presets.firstIndex(where: { $0.id == id }) else { return }
-        presets.remove(at: index)
-        if selectedPresetID == id {
-            selectedPresetID = presets[min(index, presets.count - 1)].id
-        }
+    /// Deletes the hotkey at `index` (its title and sound), moving every later slot down one key
+    /// so the row closes up, and shows one fewer key.
+    func removeKey(at index: Int) {
+        guard canRemoveKey, let selectedIndex, index < keyCount else { return }
+        var slots = presets[selectedIndex].slots
+        slots.remove(at: index)
+        slots.append(Self.blankSlots()[slots.count])
+        presets[selectedIndex].slots = slots
+        presets[selectedIndex].keyCount = keyCount - 1
         scheduleSave()
     }
 
@@ -143,8 +166,9 @@ final class HotkeyBarStore: ObservableObject {
         return presets[selectedIndex].slots[index].assignment
     }
 
+    /// The visible slot for a key press. Keys 6-0 return nil while hidden, so they pass through.
     func slot(forKeyCode keyCode: UInt16) -> KeySlot? {
-        Self.keySlots.first { $0.keyCode == keyCode }
+        visibleKeySlots.first { $0.keyCode == keyCode }
     }
 
     /// The slot (if any) a given sound is assigned to in the currently selected preset, e.g. for
@@ -153,7 +177,7 @@ final class HotkeyBarStore: ObservableObject {
         guard let selectedIndex,
               let slotIndex = presets[selectedIndex].slots.firstIndex(where: { $0.assignment?.soundID == soundID })
         else { return nil }
-        return Self.keySlots.first { $0.index == slotIndex }
+        return visibleKeySlots.first { $0.index == slotIndex }
     }
 
     func assign(_ sound: Sound, toSlot index: Int) {

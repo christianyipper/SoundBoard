@@ -121,16 +121,49 @@ final class PlaylistStore: ObservableObject {
         return imported
     }
 
-    /// Points a playlist at a single on-disk parent folder: imports its contents the same way
-    /// `importFolderContents` does (subfolders become tabs) and marks the playlist as having a
-    /// root folder selected, so the picker is offered only once per playlist.
+    /// Adds `folderURL` to the playlist as a folder (tab) named after it, holding the audio files
+    /// found directly inside it; its subfolders, at any depth, become folders of their own the same
+    /// way `importFolderContents` handles them.
+    ///
+    /// When `replacingTabID` names one of the playlist's folders other than the root, that folder
+    /// is replaced instead of a new one being added: it takes `folderURL`'s name and contents, and
+    /// its previous sounds (and their copied files) are removed. The old sounds are only removed
+    /// once every new file has copied successfully, so a failed import never loses them.
     @discardableResult
-    func selectRootFolder(_ url: URL, forPlaylist playlistID: UUID) throws -> [Sound] {
-        let imported = try importFolderContents(from: [url], into: playlistID)
-        if let playlistIndex = playlists.firstIndex(where: { $0.id == playlistID }) {
-            playlists[playlistIndex].rootFolderSelected = true
-            scheduleSave()
+    func importFolder(_ folderURL: URL, into playlistID: UUID, replacing replacingTabID: UUID? = nil) throws -> [Sound] {
+        guard let playlistIndex = playlists.firstIndex(where: { $0.id == playlistID }) else { return [] }
+
+        let plan = Self.planFolderImport(from: [folderURL])
+        let folderName = folderURL.lastPathComponent
+
+        let targetTabIndex: Int
+        var replacedSounds: [Sound]?
+        if let replacingTabID,
+           let index = playlists[playlistIndex].tabs.firstIndex(where: { $0.id == replacingTabID }),
+           index != 0 {
+            targetTabIndex = index
+            replacedSounds = playlists[playlistIndex].tabs[index].sounds
+        } else {
+            playlists[playlistIndex].tabs.append(SoundTab(name: folderName))
+            targetTabIndex = playlists[playlistIndex].tabs.count - 1
         }
+
+        var imported = try copySounds(from: plan.rootFiles, intoTabAt: targetTabIndex, ofPlaylistAt: playlistIndex)
+
+        if let replacedSounds {
+            for sound in replacedSounds {
+                try? fileManager.removeItem(at: url(for: sound))
+            }
+            playlists[playlistIndex].tabs[targetTabIndex].sounds.removeFirst(replacedSounds.count)
+            playlists[playlistIndex].tabs[targetTabIndex].name = folderName
+        }
+
+        for group in plan.tabFiles {
+            let tabIndex = tabIndex(named: group.name, inPlaylistAt: playlistIndex)
+            imported += try copySounds(from: group.files, intoTabAt: tabIndex, ofPlaylistAt: playlistIndex)
+        }
+
+        scheduleSave()
         return imported
     }
 

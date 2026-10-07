@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var selectedPlaylistID: UUID?
     @State private var isImporting = false
     @State private var importError: String?
+    @State private var mainMode: MainMode = .files
 
     private var selectedPlaylist: Playlist? {
         playlistStore.playlists.first { $0.id == selectedPlaylistID }
@@ -21,18 +22,25 @@ struct ContentView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(selectedPlaylistID: $selectedPlaylistID)
         } detail: {
-            VStack(spacing: 0) {
-                HotkeyBarView()
+            MainModePager(mode: $mainMode) {
+                HotkeyBarView(mode: $mainMode)
                 MusicPlayerView()
-
-                if let selectedPlaylist {
-                    SoundGridView(playlist: selectedPlaylist)
-                } else {
-                    ContentUnavailableView(
-                        "No Playlist Selected",
-                        systemImage: "music.note.list",
-                        description: Text("Choose a playlist from the sidebar, or create a new one.")
-                    )
+            } page: { mode in
+                switch mode {
+                case .files:
+                    if let selectedPlaylist {
+                        SoundGridView(playlist: selectedPlaylist)
+                    } else {
+                        ContentUnavailableView(
+                            "No Playlist Selected",
+                            systemImage: "music.note.list",
+                            description: Text("Choose a playlist from the sidebar, or create a new one.")
+                        )
+                    }
+                case .gamesheet:
+                    GamesheetView()
+                case .call:
+                    CallView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -46,7 +54,7 @@ struct ContentView: View {
                     Label("Import Audio…", systemImage: "square.and.arrow.down")
                 }
                 .disabled(selectedPlaylistID == nil)
-                .help(selectedPlaylistID == nil ? "Select a playlist first" : "Import audio files or folders into this playlist. Subfolders become their own tabs.")
+                .help(selectedPlaylistID == nil ? "Select a playlist first" : "Import audio files into this playlist. Use the folder button above the sounds to add folders.")
             }
 
             ToolbarItem {
@@ -70,7 +78,7 @@ struct ContentView: View {
         }
         .fileImporter(
             isPresented: $isImporting,
-            allowedContentTypes: [.mp3, .wav, .aiff, .mpeg4Audio, .audio, .folder],
+            allowedContentTypes: [.mp3, .wav, .aiff, .mpeg4Audio, .audio],
             allowsMultipleSelection: true
         ) { result in
             handleImportResult(result)
@@ -80,6 +88,10 @@ struct ContentView: View {
         }, message: {
             Text(importError ?? "")
         })
+        // The Call view has its own "Goal Call" hotkey rack; the other views share "Default".
+        .onChange(of: mainMode, initial: true) { _, mode in
+            hotkeyBarStore.selectPreset(named: mode.hotkeyPresetName)
+        }
         .onAppear {
             if selectedPlaylistID == nil {
                 selectedPlaylistID = playlistStore.playlists.first?.id
@@ -97,7 +109,7 @@ struct ContentView: View {
         switch result {
         case .success(let urls):
             do {
-                try playlistStore.importFolderContents(from: urls, into: playlistID)
+                try playlistStore.importSounds(from: urls, into: playlistID)
             } catch {
                 importError = error.localizedDescription
             }

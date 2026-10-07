@@ -160,6 +160,68 @@ final class PlaylistStoreTests: XCTestCase {
         XCTAssertEqual(Set(tabNamedA?.sounds.map(\.name) ?? []), ["one", "two"])
     }
 
+    private func makeFolder(_ name: String, files: [String], subfolders: [String: [String]] = [:]) throws -> URL {
+        let folder = tempDirectory.appendingPathComponent("source-\(UUID().uuidString)").appendingPathComponent(name)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for file in files {
+            try Data([0x01]).write(to: folder.appendingPathComponent(file))
+        }
+        for (subfolder, subfiles) in subfolders {
+            let subURL = folder.appendingPathComponent(subfolder)
+            try FileManager.default.createDirectory(at: subURL, withIntermediateDirectories: true)
+            for file in subfiles {
+                try Data([0x01]).write(to: subURL.appendingPathComponent(file))
+            }
+        }
+        return folder
+    }
+
+    func testImportFolderAddsFolderAsNewTabNamedAfterIt() throws {
+        let store = PlaylistStore(baseDirectory: tempDirectory)
+        let playlist = store.addPlaylist(name: "Effects")
+        let folder = try makeFolder("Horns", files: ["a.wav", "b.mp3"], subfolders: ["Short": ["c.wav"]])
+
+        try store.importFolder(folder, into: playlist.id)
+
+        let tabs = try XCTUnwrap(store.playlists.first).tabs
+        XCTAssertEqual(tabs.map(\.name), [Playlist.defaultTabName, "Horns", "Short"])
+        XCTAssertTrue(tabs[0].sounds.isEmpty)
+        XCTAssertEqual(tabs[1].sounds.map(\.name), ["a", "b"])
+        XCTAssertEqual(tabs[2].sounds.map(\.name), ["c"])
+    }
+
+    func testImportFolderReplacingTabSwapsNameAndContentsAndDeletesOldFiles() throws {
+        let store = PlaylistStore(baseDirectory: tempDirectory)
+        let playlist = store.addPlaylist(name: "Effects")
+        try store.importFolder(try makeFolder("Old", files: ["old.wav"]), into: playlist.id)
+        let oldTab = try XCTUnwrap(store.playlists.first?.tabs.last)
+        let oldFileURL = store.url(for: try XCTUnwrap(oldTab.sounds.first))
+
+        try store.importFolder(try makeFolder("New", files: ["x.wav", "y.wav"]), into: playlist.id, replacing: oldTab.id)
+
+        let tabs = try XCTUnwrap(store.playlists.first).tabs
+        XCTAssertEqual(tabs.count, 2)
+        XCTAssertEqual(tabs[1].id, oldTab.id)
+        XCTAssertEqual(tabs[1].name, "New")
+        XCTAssertEqual(tabs[1].sounds.map(\.name), ["x", "y"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldFileURL.path))
+    }
+
+    func testImportFolderNeverReplacesRootTab() throws {
+        let store = PlaylistStore(baseDirectory: tempDirectory)
+        let playlist = store.addPlaylist(name: "Effects")
+        let sourceURL = tempDirectory.appendingPathComponent("loose.wav")
+        try Data([0x01]).write(to: sourceURL)
+        try store.importSounds(from: [sourceURL], into: playlist.id)
+        let rootID = try XCTUnwrap(store.playlists.first?.tabs.first?.id)
+
+        try store.importFolder(try makeFolder("New", files: ["x.wav"]), into: playlist.id, replacing: rootID)
+
+        let tabs = try XCTUnwrap(store.playlists.first).tabs
+        XCTAssertEqual(tabs.map(\.name), [Playlist.defaultTabName, "New"])
+        XCTAssertEqual(tabs[0].sounds.map(\.name), ["loose"])
+    }
+
     func testSoundOperationsWorkAcrossTabs() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
         let playlist = store.addPlaylist(name: "Effects")

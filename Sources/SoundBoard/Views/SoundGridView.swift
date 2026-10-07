@@ -14,7 +14,7 @@ struct SoundGridView: View {
     @State private var explorerTabs: [ExplorerTab] = []
     @State private var activeExplorerTabID: UUID?
     @State private var isGridCollapsed = false
-    @State private var isSelectingRootFolder = false
+    @State private var isSelectingFolder = false
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16)]
 
@@ -61,14 +61,13 @@ struct SoundGridView: View {
                 currentFolderID: currentFolder.id,
                 currentFolderName: currentFolder.name,
                 rootFolderID: rootFolderID,
-                rootFolderSelected: playlist.rootFolderSelected,
                 canGoBack: !(activeExplorerTab?.backStack.isEmpty ?? true),
                 canGoForward: !(activeExplorerTab?.forwardStack.isEmpty ?? true),
                 isGridCollapsed: $isGridCollapsed,
                 onBack: goBack,
                 onForward: goForward,
                 onNavigateHome: { navigate(to: rootFolderID) },
-                onSelectFolder: { isSelectingRootFolder = true },
+                onSelectFolder: { isSelectingFolder = true },
                 onDeleteFolder: deleteFolder
             )
 
@@ -126,11 +125,11 @@ struct SoundGridView: View {
             isGridCollapsed = false
         }
         .fileImporter(
-            isPresented: $isSelectingRootFolder,
+            isPresented: $isSelectingFolder,
             allowedContentTypes: [.folder],
             allowsMultipleSelection: false
         ) { result in
-            handleRootFolderSelection(result)
+            handleFolderSelection(result)
         }
         .alert("Import Failed", isPresented: Binding(
             get: { importError != nil },
@@ -196,12 +195,15 @@ struct SoundGridView: View {
 
     // MARK: - Folders
 
-    private func handleRootFolderSelection(_ result: Result<[URL], Error>) {
+    /// At the root, adds the chosen folder as a new folder; inside a folder, replaces that folder
+    /// with the chosen one (see PlaylistStore.importFolder).
+    private func handleFolderSelection(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
             guard let url = urls.first else { return }
+            let replacingID = currentFolder.id == rootFolderID ? nil : currentFolder.id
             do {
-                try playlistStore.selectRootFolder(url, forPlaylist: playlist.id)
+                try playlistStore.importFolder(url, into: playlist.id, replacing: replacingID)
             } catch {
                 importError = error.localizedDescription
             }
@@ -316,7 +318,6 @@ private struct ExplorerPathBar: View {
     let currentFolderID: UUID
     let currentFolderName: String
     let rootFolderID: UUID
-    let rootFolderSelected: Bool
     let canGoBack: Bool
     let canGoForward: Bool
     @Binding var isGridCollapsed: Bool
@@ -354,14 +355,14 @@ private struct ExplorerPathBar: View {
 
             Spacer(minLength: 0)
 
-            if !rootFolderSelected {
-                Button(action: onSelectFolder) {
-                    Image(systemName: "folder.badge.plus")
-                }
-                .buttonStyle(.borderless)
-                .help("Select this playlist's parent folder (can only be set once)")
-                .pointerCursor()
+            Button(action: onSelectFolder) {
+                Image(systemName: isAtRoot ? "folder.badge.plus" : "arrow.triangle.2.circlepath")
             }
+            .buttonStyle(.borderless)
+            .help(isAtRoot
+                ? "Add a folder of sounds to this playlist"
+                : "Replace “\(currentFolderName)” with another folder (its current sounds are removed)")
+            .pointerCursor()
 
             if !isAtRoot {
                 Button(role: .destructive) {
@@ -441,6 +442,10 @@ private struct FolderTileView: View {
             }
             .foregroundStyle(DesignSystem.Colors.textPrimary)
             .frame(width: 140, height: 110)
+            // A .plain button only hit-tests the label's opaque pixels (icon + text), so clicks
+            // on the tile's empty space did nothing. The glassCard's contentShape below sits
+            // outside the Button and doesn't widen its hit area, so it has to be set here.
+            .contentShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.medium, style: .continuous))
         }
         .buttonStyle(.plain)
         .glassCard(cornerRadius: DesignSystem.Radius.medium, tint: DesignSystem.Colors.accentPrimary)

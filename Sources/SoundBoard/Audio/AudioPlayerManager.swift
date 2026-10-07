@@ -1,9 +1,9 @@
 import AVFoundation
 import Combine
 
-/// Plays sounds via an AVAudioEngine graph (one AVAudioPlayerNode + AVAudioUnitReverb per sound,
-/// feeding a shared mixer) and tracks per-sound play state for the grid's color coding:
-/// idle (never played / reset), playing (green), played (paused or finished, red).
+/// Plays sounds via an AVAudioEngine graph (one AVAudioPlayerNode → AVAudioUnitReverb →
+/// loudness-gain EQ chain per sound, feeding a shared mixer) and tracks per-sound play state for
+/// the grid's color coding: idle (never played / reset), playing (green), played (paused or finished, red).
 ///
 /// AVAudioEngine (rather than plain AVAudioPlayer) is what makes the reverb setting possible:
 /// AVAudioPlayer has no effects pipeline, so getting adjustable reverb requires routing playback
@@ -33,11 +33,30 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         }
     }
 
+    /// When true, each sound is gain-matched to a common loudness (see LoudnessAnalyzer) before
+    /// the master volume applies, so one volume setting suits every sound. Applied immediately.
+    var normalizeLoudness: Bool = true {
+        didSet {
+            guard normalizeLoudness != oldValue else { return }
+            for channel in channels.values {
+                applyNormalizationGain(to: channel)
+            }
+        }
+    }
+
     /// Holds the playback graph nodes and scheduling state for a single sound.
     private final class Channel {
         let playerNode = AVAudioPlayerNode()
+        /// Carries the per-sound loudness-normalization gain. AVAudioPlayerNode.volume tops out at
+        /// 1.0 (and is already used for master volume + fades), so boosting a quiet sound needs a
+        /// separate gain stage — an EQ's globalGain (-96...+24 dB) with its band bypassed.
+        /// It sits after the reverb, not before: reverb is linear so the result sounds the same,
+        /// but an EQ feeding the reverb directly makes AVAudioPlayerNode.play() stall for ~5s on
+        /// low-sample-rate files (e.g. 8 kHz), while reverb → EQ doesn't.
+        let gainNode = AVAudioUnitEQ(numberOfBands: 1)
         let reverbNode = AVAudioUnitReverb()
         let file: AVAudioFile
+        let fileURL: URL
         /// True when the file hasn't been scheduled yet, or finished playing and needs
         /// re-scheduling from the start before the next play() can produce audio.
         var needsScheduling = true
@@ -48,15 +67,27 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         /// ignore that stale callback instead of clobbering a play() that already restarted it.
         var scheduleGeneration = 0
 
-        init(file: AVAudioFile) {
+        init(file: AVAudioFile, fileURL: URL) {
             self.file = file
+            self.fileURL = fileURL
+            gainNode.bands[0].bypass = true
         }
     }
 
-    private let engine = AVAudioEngine()
+    private let engine: AVAudioEngine
     private var engineStarted = false
     private var channels: [UUID: Channel] = [:]
     private var cancellables = Set<AnyCancellable>()
+    private let loudnessCache: LoudnessCache
+    private let analysisQueue = DispatchQueue(label: "SoundBoard.LoudnessAnalysis", qos: .utility)
+
+    /// `engine` is injectable so tests can pass one in offline manual-rendering mode and inspect
+    /// exactly what the graph produces.
+    init(loudnessCache: LoudnessCache = LoudnessCache(), engine: AVAudioEngine = AVAudioEngine()) {
+        self.loudnessCache = loudnessCache
+        self.engine = engine
+        super.init()
+    }
 
     /// Keeps fadeOutDuration/volume/reverbAmount in sync with the persisted settings.
     func bind(to settingsStore: SettingsStore) {
@@ -66,8 +97,32 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 self?.volume = settings.volume
                 self?.reverbAmount = settings.reverbAmount
                 self?.crossFadeDuration = settings.crossFadeDuration
+                self?.normalizeLoudness = settings.normalizeLoudness
             }
             .store(in: &cancellables)
+    }
+
+    /// Analyzes every sound's loudness in the background as playlists load or sounds are imported,
+    /// so the (one-time, per-file) analysis is normally done long before a sound is first played
+    /// and play() never has to wait on it.
+    func bind(to playlistStore: PlaylistStore) {
+        playlistStore.$playlists
+            .sink { [weak self, weak playlistStore] playlists in
+                guard let self, let playlistStore else { return }
+                let urls = playlists.flatMap(\.allSounds).map(playlistStore.url(for:))
+                self.analyzeLoudnessInBackground(urls)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func analyzeLoudnessInBackground(_ urls: [URL]) {
+        let pending = urls.filter { loudnessCache.measurement(for: $0) == nil }
+        guard !pending.isEmpty else { return }
+        analysisQueue.async { [loudnessCache] in
+            for url in pending {
+                _ = loudnessCache.measurementAnalyzingIfNeeded(for: url)
+            }
+        }
     }
 
     /// The full duration, in seconds, of `soundID`'s audio file — available once it's been played
@@ -175,19 +230,26 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             channel = existing
         } else {
             guard let file = try? AVAudioFile(forReading: fileURL) else { return nil }
-            let created = Channel(file: file)
+            let created = Channel(file: file, fileURL: fileURL)
             // AVAudioUnitReverb produces glitchy/unstable output until a factory preset is
             // loaded — without this, that noise hides under the dry signal at full volume but
             // is exposed as an audible artifact once the dry signal fades toward silence.
             created.reverbNode.loadFactoryPreset(.mediumRoom)
             created.reverbNode.wetDryMix = reverbAmount
             engine.attach(created.playerNode)
+            engine.attach(created.gainNode)
             engine.attach(created.reverbNode)
             engine.connect(created.playerNode, to: created.reverbNode, format: file.processingFormat)
-            // Passing nil here lets the engine use the reverb unit's actual (possibly
-            // upmixed/resampled) output format instead of assuming it matches the input file,
-            // which avoids format-mismatch failures for unusual source sample rates/channel counts.
-            engine.connect(created.reverbNode, to: engine.mainMixerNode, format: nil)
+            // Everything after the player runs at the file's own sample rate, in stereo, and that
+            // format must be passed explicitly. With `format: nil` the engine falls back to the
+            // effect units' default 44.1 kHz output format, but effects don't resample — so a
+            // 48 kHz file would be played back as if it were 44.1 kHz (~8% slow and flat in pitch),
+            // a 96 kHz file at half speed. Stereo because the reverb can't output mono; the main
+            // mixer then handles any conversion to the output device's rate and layout.
+            let effectsFormat = AVAudioFormat(standardFormatWithSampleRate: file.processingFormat.sampleRate, channels: 2)
+            engine.connect(created.reverbNode, to: created.gainNode, format: effectsFormat)
+            engine.connect(created.gainNode, to: engine.mainMixerNode, format: effectsFormat)
+            applyNormalizationGain(to: created)
             channels[sound.id] = created
             channel = created
         }
@@ -275,6 +337,19 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         step(1)
     }
 
+    /// Sets the channel's gain stage to its sound's loudness-normalization gain, or 0 dB when
+    /// normalization is off. If the background analysis hasn't reached this file yet (e.g. it was
+    /// played right after import), it's analyzed synchronously here instead — a short one-time
+    /// delay is better than the sound starting at one level and audibly jumping to another.
+    private func applyNormalizationGain(to channel: Channel) {
+        guard normalizeLoudness,
+              let measurement = loudnessCache.measurementAnalyzingIfNeeded(for: channel.fileURL) else {
+            channel.gainNode.globalGain = 0
+            return
+        }
+        channel.gainNode.globalGain = Float(LoudnessAnalyzer.normalizationGain(for: measurement))
+    }
+
     /// Stops the node and marks it as needing rescheduling, so the next play() starts from frame 0.
     private func stopAndRewind(_ channel: Channel) {
         channel.playerNode.stop()
@@ -298,8 +373,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             channel.fadeWorkItem?.cancel()
             channel.playerNode.stop()
             engine.disconnectNodeInput(channel.playerNode)
+            engine.disconnectNodeInput(channel.gainNode)
             engine.disconnectNodeInput(channel.reverbNode)
             engine.detach(channel.playerNode)
+            engine.detach(channel.gainNode)
             engine.detach(channel.reverbNode)
         }
         playingIDs.remove(soundID)

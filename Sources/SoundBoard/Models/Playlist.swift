@@ -7,16 +7,11 @@ struct Playlist: Identifiable, Codable, Equatable {
     var id: UUID
     var name: String
     var tabs: [SoundTab]
-    /// Whether `PlaylistStore.selectRootFolder` has already been used on this playlist. A
-    /// playlist may only be pointed at one on-disk parent folder, so the picker is offered once
-    /// and then replaced by a "change" affordance rather than being clickable indefinitely.
-    var rootFolderSelected: Bool
 
     init(id: UUID = UUID(), name: String, sounds: [Sound] = []) {
         self.id = id
         self.name = name
         self.tabs = [SoundTab(name: Self.defaultTabName, sounds: sounds)]
-        self.rootFolderSelected = false
     }
 
     /// Convenience accessor for the default (first) tab's sounds, for call sites that don't care about tabs.
@@ -37,17 +32,15 @@ struct Playlist: Identifiable, Codable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, tabs, sounds, rootFolderSelected
+        case id, name, tabs, sounds
     }
 
     // Custom Codable so playlists saved before tabs existed (which only had a `sounds` array)
-    // still load correctly, migrated into a single default tab, and so playlists saved before
-    // rootFolderSelected existed default to false (picker still offered).
+    // still load correctly, migrated into a single default tab.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
-        rootFolderSelected = try container.decodeIfPresent(Bool.self, forKey: .rootFolderSelected) ?? false
         if let tabs = try container.decodeIfPresent([SoundTab].self, forKey: .tabs), !tabs.isEmpty {
             self.tabs = tabs
         } else {
@@ -61,6 +54,5 @@ struct Playlist: Identifiable, Codable, Equatable {
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
         try container.encode(tabs, forKey: .tabs)
-        try container.encode(rootFolderSelected, forKey: .rootFolderSelected)
     }
 }

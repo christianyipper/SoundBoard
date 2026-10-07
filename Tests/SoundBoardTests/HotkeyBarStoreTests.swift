@@ -24,8 +24,8 @@ final class HotkeyBarStoreTests: XCTestCase {
         let store = HotkeyBarStore(baseDirectory: tempDirectory)
         let titles = (0..<10).map { store.title(at: $0) }
         XCTAssertEqual(titles, [
-            "Home Goal", "Away Goal", "Penalty", "Even Strength", "Scorer",
-            "Assist 1", "Assist 2", "End of Goal", "End of Period", "Last Minute"
+            "Home Goal", "Away Goal", "Penalty", "Even Strength", "End of Period",
+            "Slot 6", "Slot 7", "Slot 8", "Slot 9", "Slot 0"
         ])
     }
 
@@ -54,6 +54,7 @@ final class HotkeyBarStoreTests: XCTestCase {
 
     func testSlotForKeyCodeLookup() {
         let store = HotkeyBarStore(baseDirectory: tempDirectory)
+        (0..<5).forEach { _ in store.addKey() }
         XCTAssertEqual(store.slot(forKeyCode: 18)?.displayKey, "1")
         XCTAssertEqual(store.slot(forKeyCode: 29)?.displayKey, "0")
         XCTAssertNil(store.slot(forKeyCode: 99))
@@ -76,83 +77,128 @@ final class HotkeyBarStoreTests: XCTestCase {
         XCTAssertEqual(store.title(at: 0), "Custom Title")
     }
 
-    func testCreateSelectAndDeletePreset() {
+    func testAddingAndRemovingKeys() {
         let store = HotkeyBarStore(baseDirectory: tempDirectory)
-        let defaultPresetID = store.presets.first!.id
+        XCTAssertEqual(store.visibleKeySlots.map(\.displayKey), ["1", "2", "3", "4", "5"])
+        XCTAssertNil(store.slot(forKeyCode: 22), "key 6 should pass through while hidden")
 
-        let preset = store.createPreset(name: "Basketball")
-        XCTAssertEqual(store.selectedPresetID, preset.id)
-        XCTAssertEqual(store.presets.count, 2)
+        store.addKey()
+        XCTAssertEqual(store.keyCount, 6)
+        XCTAssertEqual(store.slot(forKeyCode: 22)?.displayKey, "6")
 
-        store.selectPreset(defaultPresetID)
-        XCTAssertEqual(store.selectedPresetID, defaultPresetID)
+        (0..<10).forEach { _ in store.addKey() }
+        XCTAssertEqual(store.keyCount, 10, "can't go past key 0")
+        XCTAssertFalse(store.canAddKey)
+
+        (0..<20).forEach { _ in store.removeLastKey() }
+        XCTAssertEqual(store.keyCount, 1, "at least one key stays")
+        XCTAssertFalse(store.canRemoveKey)
+    }
+
+    func testDefaultAndGoalCallPresetsExist() {
+        let store = HotkeyBarStore(baseDirectory: tempDirectory)
+        XCTAssertEqual(store.presets.map(\.name), ["Default", "Goal Call"])
+        XCTAssertEqual(store.selectedPresetID, store.presets[0].id)
         XCTAssertEqual(store.title(at: 0), "Home Goal")
 
-        store.deletePreset(preset.id)
-        XCTAssertEqual(store.presets.count, 1)
+        store.selectPreset(named: "Goal Call")
+        XCTAssertEqual(store.selectedPresetID, store.presets[1].id)
+        XCTAssertEqual(store.title(at: 0), "Team Intro")
+        XCTAssertEqual((0..<10).map { store.title(at: $0) }, [
+            "Team Intro", "Goal", "Assist #1", "Assist #2", "Team End",
+            "Slot 6", "Slot 7", "Slot 8", "Slot 9", "Slot 0"
+        ])
     }
 
-    func testDeletingTheOnlyPresetIsANoOp() {
+    func testGoalCallPresetKeepsItsOwnAssignments() {
         let store = HotkeyBarStore(baseDirectory: tempDirectory)
-        let onlyPresetID = store.presets.first!.id
+        let horn = Sound(name: "Horn", fileName: "horn.wav")
+        let call = Sound(name: "Call", fileName: "call.wav")
+        store.assign(horn, toSlot: 0)
+        store.selectPreset(named: "Goal Call")
+        store.assign(call, toSlot: 0)
+        store.flush()
 
-        store.deletePreset(onlyPresetID)
-
-        XCTAssertEqual(store.presets.count, 1)
-        XCTAssertEqual(store.selectedPresetID, onlyPresetID)
+        let reloaded = HotkeyBarStore(baseDirectory: tempDirectory)
+        XCTAssertEqual(reloaded.assignment(at: 0)?.soundID, call.id, "the selected preset persists")
+        reloaded.selectPreset(named: "Default")
+        XCTAssertEqual(reloaded.assignment(at: 0)?.soundID, horn.id)
     }
 
-    func testPresetsHaveIndependentTitlesAndAssignments() {
+    func testHiddenKeysKeepTheirAssignments() {
         let store = HotkeyBarStore(baseDirectory: tempDirectory)
-        let defaultPresetID = store.presets.first!.id
-        let sound = Sound(name: "Buzzer", fileName: "buzzer.wav")
-        store.assign(sound, toSlot: 0)
+        let sound = Sound(name: "Horn", fileName: "horn.wav")
+        store.assign(sound, toSlot: 4)
 
-        let basketball = store.createPreset(name: "Basketball")
-        XCTAssertNil(store.assignment(at: 0), "new preset should start with no assignments")
-        store.renameSlot(0, title: "Buzzer Beater")
-
-        store.selectPreset(defaultPresetID)
-        XCTAssertEqual(store.assignment(at: 0)?.soundID, sound.id, "original preset's assignment should be untouched")
-        XCTAssertEqual(store.title(at: 0), "Home Goal", "original preset's title should be untouched")
-
-        store.selectPreset(basketball.id)
-        XCTAssertEqual(store.title(at: 0), "Buzzer Beater")
+        store.removeLastKey()
+        XCTAssertNil(store.slot(forSoundID: sound.id), "hidden slots shouldn't badge sounds")
+        store.addKey()
+        XCTAssertEqual(store.assignment(at: 4)?.soundID, sound.id)
+        XCTAssertEqual(store.slot(forSoundID: sound.id)?.displayKey, "5")
     }
 
-    func testSelectAdjacentPresetWrapsAroundInBothDirections() {
+    func testRemovingAHotkeyShiftsLaterKeysDown() {
         let store = HotkeyBarStore(baseDirectory: tempDirectory)
-        let firstID = store.presets.first!.id
-        let second = store.createPreset(name: "Second")
-        let third = store.createPreset(name: "Third")
-        store.selectPreset(firstID)
+        let penalty = Sound(name: "Penalty", fileName: "penalty.wav")
+        let scorer = Sound(name: "Scorer", fileName: "scorer.wav")
+        store.assign(penalty, toSlot: 2)
+        store.assign(scorer, toSlot: 4)
 
-        store.selectAdjacentPreset(offset: 1)
-        XCTAssertEqual(store.selectedPresetID, second.id)
+        store.removeKey(at: 2)
 
-        store.selectAdjacentPreset(offset: 1)
-        XCTAssertEqual(store.selectedPresetID, third.id)
-
-        store.selectAdjacentPreset(offset: 1)
-        XCTAssertEqual(store.selectedPresetID, firstID, "should wrap around past the last preset")
-
-        store.selectAdjacentPreset(offset: -1)
-        XCTAssertEqual(store.selectedPresetID, third.id, "should wrap around backwards past the first preset")
+        XCTAssertEqual(store.keyCount, 4)
+        XCTAssertNil(store.slot(forSoundID: penalty.id))
+        XCTAssertEqual(store.title(at: 2), "Even Strength")
+        XCTAssertEqual(store.assignment(at: 3)?.soundID, scorer.id)
+        XCTAssertEqual(store.slot(forSoundID: scorer.id)?.displayKey, "4")
+        XCTAssertEqual(store.title(at: 9), "Slot 0", "a blank slot fills in at the end")
     }
 
-    func testSelectAdjacentPresetIsNoOpWithOnlyOnePreset() {
+    func testKeyCountPersists() {
         let store = HotkeyBarStore(baseDirectory: tempDirectory)
-        let onlyPresetID = store.presets.first!.id
+        store.addKey()
+        store.flush()
 
-        store.selectAdjacentPreset(offset: 1)
-
-        XCTAssertEqual(store.selectedPresetID, onlyPresetID)
+        XCTAssertEqual(HotkeyBarStore(baseDirectory: tempDirectory).keyCount, 6)
     }
 
-    func testRenamePreset() {
+    func testExtendedKeysSwitchMigratesToKeyCount() throws {
+        let slots = (0..<10).map { ["title": "T\($0)"] }
+        let json: [String: Any] = [
+            "presets": [
+                ["id": UUID().uuidString, "name": "Default", "slots": slots, "showsExtendedKeys": true],
+                ["id": UUID().uuidString, "name": "Goal Call", "slots": slots, "showsExtendedKeys": false]
+            ]
+        ]
+        try JSONSerialization.data(withJSONObject: json).write(to: tempDirectory.appendingPathComponent("hotkeys.json"))
+
         let store = HotkeyBarStore(baseDirectory: tempDirectory)
-        let presetID = store.presets.first!.id
-        store.renamePreset(presetID, to: "Hockey")
-        XCTAssertEqual(store.presets.first?.name, "Hockey")
+        XCTAssertEqual(store.keyCount, 10)
+        store.selectPreset(named: "Goal Call")
+        XCTAssertEqual(store.keyCount, 5)
+    }
+
+    func testLegacyUserPresetsMigrateToFixedPresets() throws {
+        let sound = Sound(name: "Horn", fileName: "horn.wav")
+        let assignment = HotkeyAssignment(sound: sound)
+        let legacySlots = (0..<10).map { i in
+            ["title": "T\(i)", "assignment": i == 7 ? ["soundID": assignment.soundID.uuidString, "name": assignment.name, "fileName": assignment.fileName] : nil] as [String: Any?]
+        }.map { $0.compactMapValues { $0 } }
+        let legacyID = UUID()
+        let json: [String: Any] = [
+            "presets": [
+                ["id": legacyID.uuidString, "name": "Hockey", "slots": legacySlots],
+                ["id": UUID().uuidString, "name": "Basketball", "slots": legacySlots]
+            ],
+            "selectedPresetID": legacyID.uuidString
+        ]
+        try JSONSerialization.data(withJSONObject: json).write(to: tempDirectory.appendingPathComponent("hotkeys.json"))
+
+        let store = HotkeyBarStore(baseDirectory: tempDirectory)
+        XCTAssertEqual(store.presets.map(\.name), ["Default", "Goal Call"])
+        XCTAssertEqual(store.selectedPresetID, legacyID, "first legacy preset becomes Default")
+        XCTAssertEqual(store.title(at: 0), "T0")
+        XCTAssertEqual(store.keyCount, 5, "legacy presets start with only keys 1-5 showing")
+        XCTAssertEqual(store.assignment(at: 7)?.soundID, sound.id, "the hidden 6-0 assignment is kept")
     }
 }
