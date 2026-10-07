@@ -44,7 +44,8 @@ struct SoundBoardApp: App {
         _settingsStore = StateObject(wrappedValue: settings)
         _microphoneManager = StateObject(wrappedValue: microphone)
         _musicPlayerStore = StateObject(wrappedValue: musicPlayer)
-        _gameStore = StateObject(wrappedValue: GameStore(baseDirectory: store.appSupportDirectory))
+        let game = GameStore(baseDirectory: store.appSupportDirectory)
+        _gameStore = StateObject(wrappedValue: game)
         _rosterStore = StateObject(wrappedValue: RosterStore(baseDirectory: store.appSupportDirectory))
         shortcutManager = ShortcutManager(
             playlistStore: store,
@@ -52,7 +53,8 @@ struct SoundBoardApp: App {
             hotkeyBarStore: hotkeys,
             microphoneManager: microphone,
             musicPlayerStore: musicPlayer,
-            settingsStore: settings
+            settingsStore: settings,
+            gameStore: game
         )
     }
 

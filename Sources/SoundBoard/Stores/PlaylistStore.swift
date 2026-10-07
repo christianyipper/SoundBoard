@@ -1,9 +1,15 @@
 import Foundation
 
-/// Owns the list of playlists, persists them to disk as JSON, and manages the on-disk
-/// copies of imported audio files so playback never depends on the original file's location.
+/// Owns the sound library every saved game shares, persists it to disk as JSON, and manages the
+/// on-disk copies of imported audio files so playback never depends on the original file's
+/// location. The sidebar's playlists are saved games (see GameStore), so there's exactly one
+/// library; libraries saved back when each playlist had its own sounds are merged into it on load.
 final class PlaylistStore: ObservableObject {
-    @Published var playlists: [Playlist] = []
+    static let libraryName = "Sounds"
+
+    /// Always exactly one: the shared library. Kept as an array so lookups and the on-disk
+    /// format stay the same as before playlists became games.
+    @Published private(set) var playlists: [Playlist] = []
 
     let appSupportDirectory: URL
     let soundsDirectory: URL
@@ -25,36 +31,35 @@ final class PlaylistStore: ObservableObject {
         playlistsFileURL = appSupportDirectory.appendingPathComponent("playlists.json")
 
         try? fileManager.createDirectory(at: soundsDirectory, withIntermediateDirectories: true)
-        playlists = Self.load(from: playlistsFileURL) ?? []
+        playlists = [Self.mergedLibrary(from: Self.load(from: playlistsFileURL) ?? [])]
+    }
+
+    /// The sound library every game shares.
+    var library: Playlist {
+        playlists[0]
+    }
+
+    /// Folds older per-playlist libraries into the first one: each playlist's root sounds join the
+    /// root folder, and its other folders are added (merging into a same-named folder). No sound
+    /// or file is dropped.
+    static func mergedLibrary(from loaded: [Playlist]) -> Playlist {
+        guard var library = loaded.first else { return Playlist(name: libraryName) }
+        for playlist in loaded.dropFirst() {
+            library.sounds += playlist.sounds
+            for tab in playlist.tabs.dropFirst() {
+                if let index = library.tabs.dropFirst().firstIndex(where: { $0.name == tab.name }) {
+                    library.tabs[index].sounds += tab.sounds
+                } else {
+                    library.tabs.append(tab)
+                }
+            }
+        }
+        library.name = libraryName
+        return library
     }
 
     func url(for sound: Sound) -> URL {
         soundsDirectory.appendingPathComponent(sound.fileName)
-    }
-
-    // MARK: - Playlists
-
-    @discardableResult
-    func addPlaylist(name: String) -> Playlist {
-        let playlist = Playlist(name: name)
-        playlists.append(playlist)
-        scheduleSave()
-        return playlist
-    }
-
-    func renamePlaylist(_ id: UUID, to newName: String) {
-        guard let index = playlists.firstIndex(where: { $0.id == id }) else { return }
-        playlists[index].name = newName
-        scheduleSave()
-    }
-
-    func deletePlaylist(_ id: UUID) {
-        guard let playlist = playlists.first(where: { $0.id == id }) else { return }
-        for sound in playlist.allSounds {
-            try? fileManager.removeItem(at: url(for: sound))
-        }
-        playlists.removeAll { $0.id == id }
-        scheduleSave()
     }
 
     // MARK: - Tabs
@@ -205,6 +210,16 @@ final class PlaylistStore: ObservableObject {
         for playlist in playlists {
             if let sound = playlist.allSounds.first(where: { $0.id == id }) {
                 return sound
+            }
+        }
+        return nil
+    }
+
+    /// Finds a folder (tab) by id regardless of which playlist it belongs to.
+    func folder(withID id: UUID) -> SoundTab? {
+        for playlist in playlists {
+            if let folder = playlist.tabs.first(where: { $0.id == id }) {
+                return folder
             }
         }
         return nil

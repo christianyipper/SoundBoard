@@ -101,8 +101,73 @@ final class CallTextTests: XCTestCase {
         XCTAssertEqual(Infraction.cfb.label, "CFB", "the gamesheet keeps the short label")
     }
 
+    func testHeadContactAndUnsportsmanlikeAreSpelledOutInCallView() {
+        XCTAssertEqual(Infraction.headContact.label, "Head Contact")
+        XCTAssertEqual(Infraction.headContact.fullName, "Illegal Check to the Head")
+        XCTAssertEqual(Infraction.unsportsmanlike.label, "Unsportsmanlike")
+        XCTAssertEqual(Infraction.unsportsmanlike.fullName, "Unsportsmanlike Conduct")
+        XCTAssertEqual(Infraction.kneeing.fullName, "Kneeing")
+    }
+
     func testInfractionsAreAlphabetical() {
         let labels = Infraction.allCases.map(\.label)
         XCTAssertEqual(labels, labels.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending })
+    }
+
+    private let teamNames: [TeamSide: String] = [.home: "Wolves", .away: "Bears"]
+
+    func testEndOfPeriodWithLeader() {
+        XCTAssertEqual(
+            CallText.endOfPeriod(.first, teamNames: teamNames, shots: [.home: 12, .away: 9], goals: [.home: 1, .away: 2]),
+            """
+            Shots this period, Wolves 12 - Bears 9.
+            The score, 2-1 Bears, heading into the second period.
+            """
+        )
+    }
+
+    func testEndOfPeriodTied() {
+        XCTAssertEqual(
+            CallText.endOfPeriod(.second, teamNames: teamNames, shots: [:], goals: [:]),
+            """
+            Shots this period, Wolves 0 - Bears 0.
+            The score, tied 0-0, heading into the third period.
+            """
+        )
+        XCTAssertEqual(
+            CallText.endOfPeriod(.third, teamNames: teamNames, shots: [.home: 5, .away: 7], goals: [.home: 2, .away: 2]),
+            """
+            Shots this period, Wolves 5 - Bears 7.
+            The score, tied 2-2, heading into overtime.
+            """
+        )
+    }
+
+    func testEndOfOvertime() {
+        XCTAssertEqual(
+            CallText.endOfPeriod(.overtime, teamNames: teamNames, shots: [.home: 3, .away: 1], goals: [.home: 3, .away: 2]),
+            """
+            Shots this period, Wolves 3 - Bears 1.
+            The final score, 3-2 Wolves.
+            """
+        )
+        XCTAssertEqual(
+            CallText.endOfPeriod(.overtime, teamNames: teamNames, shots: [:], goals: [.home: 2, .away: 2]),
+            """
+            Shots this period, Wolves 0 - Bears 0.
+            The score, tied 2-2, heading into a shootout.
+            """
+        )
+    }
+
+    func testOfficialsAnnouncementFillsNamesAndMarksBlanks() {
+        var officials = Officials()
+        officials.referees = ["Pat Doe", " Lee Roy "]
+        officials.linespeople = ["Kim Fox", ""]
+
+        XCTAssertEqual(
+            CallText.officialsAnnouncement(homeTeam: "Wolves", awayTeam: "Bears", officials: officials),
+            "The officials for tonight's matchup between Wolves and Bears are Referees Pat Doe and Lee Roy and Linespeople Kim Fox and ___. Now a message from the JPHL Commissioner, Richard Nault."
+        )
     }
 }

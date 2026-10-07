@@ -17,7 +17,7 @@ final class ShortcutManagerTests: XCTestCase {
 
     func testHandleTogglesSoundWithMatchingShortcut() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
         let sourceURL = tempDirectory.appendingPathComponent("a.wav")
         try TestAudioFixture.makeSilentWAVData().write(to: sourceURL)
         let sound = try store.importSounds(from: [sourceURL], into: playlist.id).first!
@@ -63,7 +63,7 @@ final class ShortcutManagerTests: XCTestCase {
 
     func testHandleTogglesHotkeyBarSlotOnPlainNumberKey() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
         let sourceURL = tempDirectory.appendingPathComponent("a.wav")
         try TestAudioFixture.makeSilentWAVData().write(to: sourceURL)
         let sound = try store.importSounds(from: [sourceURL], into: playlist.id).first!
@@ -78,7 +78,8 @@ final class ShortcutManagerTests: XCTestCase {
             hotkeyBarStore: hotkeyBarStore,
             microphoneManager: MicrophoneManager(),
             musicPlayerStore: MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager),
-            settingsStore: SettingsStore(baseDirectory: tempDirectory)
+            settingsStore: SettingsStore(baseDirectory: tempDirectory),
+            gameStore: GameStore(baseDirectory: tempDirectory)
         )
 
         let event = try XCTUnwrap(Self.keyEvent(keyCode: 18, modifierFlags: [])) // physical "1" key
@@ -98,7 +99,8 @@ final class ShortcutManagerTests: XCTestCase {
             hotkeyBarStore: hotkeyBarStore,
             microphoneManager: MicrophoneManager(),
             musicPlayerStore: MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager),
-            settingsStore: SettingsStore(baseDirectory: tempDirectory)
+            settingsStore: SettingsStore(baseDirectory: tempDirectory),
+            gameStore: GameStore(baseDirectory: tempDirectory)
         )
 
         let event = try XCTUnwrap(Self.keyEvent(keyCode: 18, modifierFlags: [])) // physical "1" key, unassigned
@@ -120,7 +122,8 @@ final class ShortcutManagerTests: XCTestCase {
             hotkeyBarStore: hotkeyBarStore,
             microphoneManager: microphoneManager,
             musicPlayerStore: MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager),
-            settingsStore: settingsStore
+            settingsStore: settingsStore,
+            gameStore: GameStore(baseDirectory: tempDirectory)
         )
 
         let event = try XCTUnwrap(Self.keyEvent(keyCode: 9, modifierFlags: [])) // physical "V" key
@@ -142,7 +145,8 @@ final class ShortcutManagerTests: XCTestCase {
             hotkeyBarStore: hotkeyBarStore,
             microphoneManager: microphoneManager,
             musicPlayerStore: MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager),
-            settingsStore: settingsStore
+            settingsStore: settingsStore,
+            gameStore: GameStore(baseDirectory: tempDirectory)
         )
 
         let downEvent = try XCTUnwrap(Self.keyEvent(keyCode: 9, modifierFlags: [], type: .keyDown))
@@ -157,21 +161,22 @@ final class ShortcutManagerTests: XCTestCase {
 
     func testHandleTogglesMusicPlayerOnSpacebar() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Music")
+        let playlist = store.library
         let sourceURL = tempDirectory.appendingPathComponent("a.wav")
         try TestAudioFixture.makeSilentWAVData().write(to: sourceURL)
         let sound = try store.importSounds(from: [sourceURL], into: playlist.id).first!
 
         let audioManager = AudioPlayerManager()
         let musicPlayerStore = MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager)
-        musicPlayerStore.selectedPlaylistID = playlist.id
+        musicPlayerStore.selectedFolderID = playlist.tabs[0].id
         let manager = ShortcutManager(
             playlistStore: store,
             audioPlayerManager: audioManager,
             hotkeyBarStore: HotkeyBarStore(baseDirectory: tempDirectory),
             microphoneManager: MicrophoneManager(),
             musicPlayerStore: musicPlayerStore,
-            settingsStore: SettingsStore(baseDirectory: tempDirectory)
+            settingsStore: SettingsStore(baseDirectory: tempDirectory),
+            gameStore: GameStore(baseDirectory: tempDirectory)
         )
 
         let event = try XCTUnwrap(Self.keyEvent(keyCode: 49, modifierFlags: [])) // spacebar
@@ -194,12 +199,38 @@ final class ShortcutManagerTests: XCTestCase {
             hotkeyBarStore: hotkeyBarStore,
             microphoneManager: MicrophoneManager(),
             musicPlayerStore: MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager),
-            settingsStore: SettingsStore(baseDirectory: tempDirectory)
+            settingsStore: SettingsStore(baseDirectory: tempDirectory),
+            gameStore: GameStore(baseDirectory: tempDirectory)
         )
 
         let event = try XCTUnwrap(Self.keyEvent(keyCode: 124, modifierFlags: [.numericPad, .function])) // right arrow
         XCTAssertNotNil(manager.handle(event), "arrow keys should propagate normally")
         XCTAssertEqual(hotkeyBarStore.selectedPresetID, selectedPresetID)
+    }
+
+    func testShotKeysAdjustCurrentPeriodShots() throws {
+        let store = PlaylistStore(baseDirectory: tempDirectory)
+        let audioManager = AudioPlayerManager()
+        let gameStore = GameStore(baseDirectory: tempDirectory)
+        let manager = ShortcutManager(
+            playlistStore: store,
+            audioPlayerManager: audioManager,
+            hotkeyBarStore: HotkeyBarStore(baseDirectory: tempDirectory),
+            microphoneManager: MicrophoneManager(),
+            musicPlayerStore: MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager),
+            settingsStore: SettingsStore(baseDirectory: tempDirectory),
+            gameStore: gameStore
+        )
+        let period = gameStore.game.currentPeriod
+
+        for keyCode: UInt16 in [12, 12, 0, 14] { // Q, Q, A, E
+            XCTAssertNil(manager.handle(try XCTUnwrap(Self.keyEvent(keyCode: keyCode, modifierFlags: []))))
+        }
+        XCTAssertEqual(gameStore.shotCount(for: .home, period: period), 1)
+        XCTAssertEqual(gameStore.shotCount(for: .away, period: period), 1)
+
+        XCTAssertNil(manager.handle(try XCTUnwrap(Self.keyEvent(keyCode: 2, modifierFlags: [])))) // D
+        XCTAssertEqual(gameStore.shotCount(for: .away, period: period), 0)
     }
 
     private func makeManager(playlistStore: PlaylistStore, audioPlayerManager: AudioPlayerManager) -> ShortcutManager {
@@ -209,7 +240,8 @@ final class ShortcutManagerTests: XCTestCase {
             hotkeyBarStore: HotkeyBarStore(baseDirectory: tempDirectory),
             microphoneManager: MicrophoneManager(),
             musicPlayerStore: MusicPlayerStore(playlistStore: playlistStore, audioPlayerManager: audioPlayerManager),
-            settingsStore: SettingsStore(baseDirectory: tempDirectory)
+            settingsStore: SettingsStore(baseDirectory: tempDirectory),
+            gameStore: GameStore(baseDirectory: tempDirectory)
         )
     }
 

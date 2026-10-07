@@ -1,93 +1,93 @@
 import SwiftUI
 
+/// The playlists: one per saved game, newest first, all sharing the same sound library. Games
+/// save themselves (see GameStore); the one on the gamesheet is selected. Click a game to open
+/// it, or right-click to rename or delete it.
 struct SidebarView: View {
-    @EnvironmentObject private var playlistStore: PlaylistStore
-    @Binding var selectedPlaylistID: UUID?
+    @EnvironmentObject private var gameStore: GameStore
 
-    @State private var isAddingPlaylist = false
-    @State private var newPlaylistName = ""
-    @State private var renamingPlaylistID: UUID?
+    @State private var pendingDelete: SavedGame?
+    @State private var renaming: SavedGame?
     @State private var renameText = ""
 
+    /// Selecting a row opens that game; the selection always follows the active save.
+    private var selection: Binding<UUID?> {
+        Binding(
+            get: { gameStore.activeSaveID },
+            set: { id in
+                guard let id, id != gameStore.activeSaveID else { return }
+                gameStore.loadSave(id)
+            }
+        )
+    }
+
     var body: some View {
-        List(selection: $selectedPlaylistID) {
-            ForEach(playlistStore.playlists) { playlist in
-                Text("\(playlist.name)  (\(playlist.allSounds.count))")
-                    .tag(playlist.id)
-                    .contextMenu {
-                        Button("Rename…") {
-                            renamingPlaylistID = playlist.id
-                            renameText = playlist.name
-                        }
-                        Button("Delete", role: .destructive) {
-                            deletePlaylist(playlist.id)
-                        }
+        List(selection: selection) {
+            ForEach(gameStore.savedGames) { save in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(save.name)
+                        .lineLimit(1)
+                    Text("\(save.goalCount(for: .home))–\(save.goalCount(for: .away)) · \(save.updatedAt.formatted(date: .omitted, time: .shortened))")
+                        .font(DesignSystem.Typography.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                .tag(save.id)
+                .contextMenu {
+                    Button("Rename…") {
+                        renameText = save.name
+                        renaming = save
                     }
+                    Button("Delete…", role: .destructive) { pendingDelete = save }
+                }
             }
 
-            // Placed after the list of playlists so it naturally sits below the last one, or at
-            // the top when the list is empty, without needing separate placement logic.
+            // Placed after the list of games so it naturally sits below the last one, or at the
+            // top when the list is empty, without needing separate placement logic.
             Button {
-                newPlaylistName = ""
-                isAddingPlaylist = true
+                gameStore.newGame()
             } label: {
-                Label("Add Playlist", systemImage: "plus")
+                Label("New Game", systemImage: "plus")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .pointerCursor()
+            .help("Start a blank game. Every game shares the same sounds.")
         }
-        .navigationTitle("Playlists")
+        .navigationTitle("Games")
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Button {
-                    newPlaylistName = ""
-                    isAddingPlaylist = true
+                    gameStore.newGame()
                 } label: {
                     Image(systemName: "plus")
                 }
                 .buttonStyle(.borderless)
                 .pointerCursor()
-                .help("Create a new playlist")
+                .help("Start a blank game")
                 Spacer()
             }
             .padding(8)
         }
-        .alert("New Playlist", isPresented: $isAddingPlaylist) {
-            TextField("Playlist Name", text: $newPlaylistName)
+        .confirmationDialog(
+            "Delete \(pendingDelete?.name ?? "game")?",
+            isPresented: isPresented($pendingDelete),
+            presenting: pendingDelete
+        ) { save in
+            Button("Delete", role: .destructive) { gameStore.deleteSave(save.id) }
+        } message: { save in
+            Text(save.id == gameStore.activeSaveID
+                 ? "This is the game on the gamesheet, so the next game will open in its place. The sounds aren't affected. This can't be undone."
+                 : "The sounds aren't affected. This can't be undone.")
+        }
+        .alert("Rename Game", isPresented: isPresented($renaming), presenting: renaming) { save in
+            TextField("Name", text: $renameText)
             Button("Cancel", role: .cancel) {}
-            Button("Create") { createPlaylist() }
-        }
-        .alert("Rename Playlist", isPresented: Binding(
-            get: { renamingPlaylistID != nil },
-            set: { if !$0 { renamingPlaylistID = nil } }
-        )) {
-            TextField("Playlist Name", text: $renameText)
-            Button("Cancel", role: .cancel) {}
-            Button("Rename") { commitRename() }
+            Button("Rename") { gameStore.renameSave(save.id, to: renameText) }
         }
     }
 
-    private func createPlaylist() {
-        let trimmed = newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        let playlist = playlistStore.addPlaylist(name: trimmed)
-        selectedPlaylistID = playlist.id
-    }
-
-    private func commitRename() {
-        guard let id = renamingPlaylistID else { return }
-        let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        playlistStore.renamePlaylist(id, to: trimmed)
-        renamingPlaylistID = nil
-    }
-
-    private func deletePlaylist(_ id: UUID) {
-        if selectedPlaylistID == id {
-            selectedPlaylistID = nil
-        }
-        playlistStore.deletePlaylist(id)
+    private func isPresented(_ item: Binding<SavedGame?>) -> Binding<Bool> {
+        Binding(get: { item.wrappedValue != nil }, set: { if !$0 { item.wrappedValue = nil } })
     }
 }

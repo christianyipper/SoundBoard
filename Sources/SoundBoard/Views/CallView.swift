@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Which way the Call tab lists goals and penalties.
 enum CallViewMode: String, CaseIterable, Identifiable {
-    /// Compact gamesheet lines, with shots per period underneath.
+    /// Compact gamesheet lines, with shots per period and the goalkeepers underneath.
     case sheet
     /// Multi-line scripts for reading each goal and penalty out.
     case call
@@ -20,15 +20,18 @@ enum CallViewMode: String, CaseIterable, Identifiable {
 /// Read-only game report for calling goals, laid out like the ScoreCard app's report grid: each
 /// team's goals and penalties listed period by period either side of the period label, with
 /// totals underneath. The toggle between the team names switches the entries between Sheet lines
-/// (plus a shots grid) and Call scripts. Player names come from the side's roster when one is
-/// picked. While this view is up, the hotkey bar shows the "Goal Call" preset (see
-/// `MainMode.hotkeyPresetName`).
+/// (plus a shots grid and each side's goalkeeper inputs) and Call scripts. Player names come from
+/// the side's roster when one is picked. While this view is up, the hotkey bar shows the
+/// "Goal Call" preset (see `MainMode.hotkeyPresetName`). As on the Gamesheet, hotkeys pause while a
+/// goalkeeper field has focus; Return on the last field, Escape, or a click anywhere outside the
+/// field ends editing.
 struct CallView: View {
     @EnvironmentObject private var gameStore: GameStore
     @EnvironmentObject private var rosterStore: RosterStore
     @AppStorage("callViewMode") private var mode: CallViewMode = .sheet
     /// Lines clicked into their team's color; the rest stay grey.
     @State private var highlighted: Set<String> = []
+    @FocusState private var focus: GamesheetField?
 
     private let periodColumnWidth: CGFloat = 110
     private let bodyFont = Font.system(size: 18, design: .rounded)
@@ -41,8 +44,8 @@ struct CallView: View {
                 reportCard(
                     title: "Goals",
                     totalLabel: "Total Goals",
-                    events: { side, period in goals(for: side, period: period).map {
-                        ReportLine(id: $0.id.uuidString, text: goalText($0))
+                    events: { side, period in goals(for: side, period: period).map { goal in
+                        ReportLine(id: goal.id.uuidString, text: goalText(goal)) { gameStore.deleteGoal(goal.id) }
                     } },
                     total: { gameStore.goalCount(for: $0) }
                 )
@@ -50,8 +53,8 @@ struct CallView: View {
                 reportCard(
                     title: "Penalties",
                     totalLabel: "Total Penalties",
-                    events: { side, period in penalties(for: side, period: period).map {
-                        ReportLine(id: $0.id.uuidString, text: penaltyText($0))
+                    events: { side, period in penalties(for: side, period: period).map { penalty in
+                        ReportLine(id: penalty.id.uuidString, text: penaltyText(penalty)) { gameStore.deletePenalty(penalty.id) }
                     } },
                     total: { side in gameStore.game.penalties.filter { $0.team == side }.count }
                 )
@@ -66,10 +69,40 @@ struct CallView: View {
                         )] },
                         total: { gameStore.shotTotal(for: $0) }
                     )
+
+                    goalkeeperCard
+                } else {
+                    endOfPeriodCard
                 }
             }
             .padding(16)
+            // Clicking empty space ends editing so hotkeys work again.
+            .background(
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { endEditing() }
+            )
         }
+        .overlay(alignment: .bottom) {
+            if focus != nil {
+                HotkeysPausedPill()
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(DesignSystem.Motion.quickFade, value: focus != nil)
+        .onExitCommand { endEditing() }
+        .endsEditingOnOutsideClick()
+        // AppKit can hand the first text field focus on its own when the view appears, which
+        // would silently turn hotkeys off.
+        .onAppear { DispatchQueue.main.async { endEditing() } }
+        .onDisappear { endEditing() }
+        .onChange(of: mode) { endEditing() }
+    }
+
+    private func endEditing() {
+        focus = nil
+        NSApp.keyWindow?.makeFirstResponder(nil)
     }
 
     // MARK: - Header
@@ -131,8 +164,11 @@ struct CallView: View {
 
             HStack(spacing: 12) {
                 totalValue(total(.home), side: .home)
+                // Wider labels like "Total Penalties" spill into the column gaps rather than wrap.
                 Text(totalLabel)
                     .font(bodyFont.bold())
+                    .lineLimit(1)
+                    .fixedSize()
                     .frame(width: periodColumnWidth)
                 totalValue(total(.away), side: .away)
             }
@@ -163,6 +199,14 @@ struct CallView: View {
                         .onTapGesture {
                             if highlighted.remove(line.id) == nil { highlighted.insert(line.id) }
                         }
+                        .contextMenu {
+                            if let delete = line.delete {
+                                Button("Delete", role: .destructive) {
+                                    highlighted.remove(line.id)
+                                    delete()
+                                }
+                            }
+                        }
                 }
             }
         }
@@ -175,6 +219,109 @@ struct CallView: View {
             .font(bodyFont.bold().monospacedDigit())
             .foregroundStyle(side.accent)
             .frame(maxWidth: .infinity, alignment: side == .home ? .leading : .trailing)
+    }
+
+    // MARK: - Goalkeepers
+
+    /// Each side's goalie, sub and the time the sub went in, home hugging the left edge and away
+    /// the right like the report rows above.
+    private var goalkeeperCard: some View {
+        VStack(spacing: 0) {
+            Text("Goalkeeper")
+                .font(DesignSystem.Typography.headline)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 6)
+
+            HStack(alignment: .top, spacing: 12) {
+                goalkeeperFields(for: .home)
+                Color.clear.frame(width: periodColumnWidth, height: 1)
+                goalkeeperFields(for: .away)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .glassCard()
+    }
+
+    private func goalkeeperFields(for side: TeamSide) -> some View {
+        let goalkeepers = gameStore.goalkeepers(for: side)
+        return HStack(alignment: .top, spacing: 8) {
+            goalkeeperNumberField("Goalie", side: side, field: .goalie(side), value: goalkeepers.goalie) { $0.goalie = $1 }
+                .help("Starting goalie's number")
+            goalkeeperNumberField("Sub", side: side, field: .goalieSub(side), value: goalkeepers.sub) { $0.sub = $1 }
+                .help("Substitute goalie's number")
+            VStack(spacing: 2) {
+                GamesheetTextField(
+                    placeholder: "00:00",
+                    text: Binding(
+                        get: { gameStore.goalieSubTimeText(for: side) },
+                        set: { gameStore.setGoalieSubTimeText($0, for: side) }
+                    ),
+                    field: .goalieSubTime(side),
+                    focus: $focus,
+                    accent: side.accent
+                )
+                // Blank caption so the time box lines up with the number boxes beside it.
+                PlayerCaption(number: "", side: side)
+            }
+            .help("Clock time the sub went in, e.g. 1245 for 12:45")
+        }
+        .frame(maxWidth: 300)
+        .frame(maxWidth: .infinity, alignment: side == .home ? .leading : .trailing)
+    }
+
+    private func goalkeeperNumberField(
+        _ placeholder: String,
+        side: TeamSide,
+        field: GamesheetField,
+        value: String,
+        set: @escaping (inout GoalkeeperEntry, String) -> Void
+    ) -> some View {
+        VStack(spacing: 2) {
+            GamesheetTextField(
+                placeholder: placeholder,
+                text: Binding(
+                    get: { value },
+                    set: { newValue in gameStore.updateGoalkeepers(for: side) { set(&$0, JerseyNumber.sanitized(newValue)) } }
+                ),
+                field: field,
+                focus: $focus,
+                accent: side.accent
+            )
+            PlayerCaption(number: value, side: side)
+        }
+    }
+
+    // MARK: - End of period
+
+    /// What to read out as the selected period ends: its shots, and the score through it.
+    private var endOfPeriodCard: some View {
+        let period = gameStore.currentPeriod
+        let text = CallText.endOfPeriod(
+            period,
+            teamNames: Dictionary(uniqueKeysWithValues: TeamSide.allCases.map { ($0, gameStore.teamName(for: $0)) }),
+            shots: Dictionary(uniqueKeysWithValues: TeamSide.allCases.map { ($0, gameStore.shotCount(for: $0, period: period)) }),
+            goals: Dictionary(uniqueKeysWithValues: TeamSide.allCases.map { side in
+                (side, gameStore.game.goals.filter { $0.team == side && $0.period <= period }.count)
+            })
+        )
+        return VStack(spacing: 6) {
+            Text("End of \(period.fullLabel)")
+                .font(DesignSystem.Typography.headline)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+            Text(text)
+                .font(bodyFont.bold())
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                .multilineTextAlignment(.center)
+                .textSelection(.enabled)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .glassCard()
     }
 
     // MARK: - Lines
@@ -225,8 +372,10 @@ struct CallView: View {
 }
 
 /// One goal, penalty, or shot count in the report grid. The id stays the same across the Sheet and
-/// Call views, so a highlighted entry stays highlighted when switching.
+/// Call views, so a highlighted entry stays highlighted when switching. Goals and penalties carry
+/// a `delete` action, offered on right-click; shot counts don't.
 private struct ReportLine: Identifiable {
     let id: String
     let text: String
+    var delete: (() -> Void)? = nil
 }

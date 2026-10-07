@@ -1,27 +1,42 @@
 import SwiftUI
 
-/// Playlist-driven background music player shown below the hotkey bar, styled like a Spotify
-/// "now playing" bar: playlist picker + current track on the left, transport controls and
-/// timeline centered, mic toggle and volume on the right. Press Space (or the center Play
-/// button) to shuffle through the selected playlist's sounds. Pressing Space again stops the
+/// Folder-driven background music player shown below the hotkey bar, styled like a Spotify
+/// "now playing" bar: folder picker + current track on the left, transport controls and
+/// timeline centered, mic toggle and volume on the right. The picker lists the folders of the
+/// sound library every game shares; press Space (or the center Play button) to shuffle through the
+/// selected folder's sounds. Pressing Space again stops the
 /// current track and cues the next one for next time, rather than resuming it; a track that
 /// finishes on its own advances automatically. Back/Skip jump to the previous/next track in the
 /// shuffle order, preserving play/pause state: they play immediately if music was already
 /// playing, or just cue the new track (silent) if it was paused. "Reset" re-shuffles the
-/// selected playlist from scratch, discarding the current play order.
+/// selected folder from scratch, discarding the current play order.
 struct MusicPlayerView: View {
+    /// The shared sound library, whose folders the picker offers.
+    let playlist: Playlist
+
     @EnvironmentObject private var playlistStore: PlaylistStore
     @EnvironmentObject private var musicPlayerStore: MusicPlayerStore
     @EnvironmentObject private var microphoneManager: MicrophoneManager
     @EnvironmentObject private var settingsStore: SettingsStore
 
-    private var selectedPlaylist: Playlist? {
-        playlistStore.playlists.first { $0.id == musicPlayerStore.selectedPlaylistID }
+    private var selectedFolder: SoundTab? {
+        musicPlayerStore.selectedFolderID.flatMap(playlistStore.folder(withID:))
+    }
+
+    /// The library's folders: its root (named after the library, as in the sound grid's
+    /// breadcrumb) when it holds loose sounds, then each imported folder.
+    private var folderOptions: [(id: UUID, name: String)] {
+        playlist.tabs.enumerated().compactMap { index, folder in
+            if index == 0 {
+                return folder.sounds.isEmpty ? nil : (folder.id, playlist.name)
+            }
+            return (folder.id, folder.name)
+        }
     }
 
     private var trackLabel: String {
-        guard selectedPlaylist != nil else { return "No Playlist Selected" }
-        guard let sound = musicPlayerStore.currentSound else { return "No Sounds in Playlist" }
+        guard selectedFolder != nil else { return "No Folder Selected" }
+        guard let sound = musicPlayerStore.currentSound else { return "No Sounds in Folder" }
         return sound.name
     }
 
@@ -42,14 +57,20 @@ struct MusicPlayerView: View {
         .background(DesignSystem.Colors.surfaceTint.opacity(0.35))
     }
 
-    // MARK: - Left: playlist selector + current track
+    // MARK: - Left: folder selector + current track
 
     private var leftSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Picker("Playlist", selection: $musicPlayerStore.selectedPlaylistID) {
-                Text("Select Playlist").tag(UUID?.none)
-                ForEach(playlistStore.playlists) { playlist in
-                    Text(playlist.name).tag(Optional(playlist.id))
+            Picker("Folder", selection: $musicPlayerStore.selectedFolderID) {
+                Text("Select Folder").tag(UUID?.none)
+                ForEach(folderOptions, id: \.id) { option in
+                    Text(option.name).tag(Optional(option.id))
+                }
+                // Keep the selected folder listed even once it's no longer offered (e.g. the
+                // root after its loose sounds are removed), so the picker doesn't blank mid-song.
+                if let selectedFolder, !folderOptions.contains(where: { $0.id == selectedFolder.id }) {
+                    Divider()
+                    Text(selectedFolder.name).tag(Optional(selectedFolder.id))
                 }
             }
             .labelsHidden()
@@ -96,7 +117,7 @@ struct MusicPlayerView: View {
                     .buttonStyle(.plain)
                     .disabled(musicPlayerStore.currentSound == nil)
                     .pointerCursor()
-                    .help("Play/pause the shuffled playlist (Space)")
+                    .help("Play/pause the shuffled folder (Space)")
 
                     TransportButton(systemImage: "forward.fill", size: 15) {
                         musicPlayerStore.skipToNext()
@@ -110,8 +131,10 @@ struct MusicPlayerView: View {
                     TransportButton(systemImage: "shuffle", size: 13) {
                         musicPlayerStore.resetShuffle()
                     }
-                    .disabled(musicPlayerStore.selectedPlaylistID == nil)
-                    .help("Re-shuffle this playlist from the start")
+                    .disabled(musicPlayerStore.selectedFolderID == nil || musicPlayerStore.isPlaying)
+                    .help(musicPlayerStore.isPlaying
+                        ? "Pause to re-shuffle this folder"
+                        : "Re-shuffle this folder from the start")
                 }
             }
 

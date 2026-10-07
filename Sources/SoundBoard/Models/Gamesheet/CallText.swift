@@ -17,6 +17,20 @@ enum CallText {
         return "\(penalty.time) - #\(penalty.playerNumber), (\(types)) \(penalty.infraction.fullName)"
     }
 
+    // MARK: - Officials
+
+    /// The officials announcement read before puck drop. Blank names show as "___" so the gaps
+    /// stand out.
+    static func officialsAnnouncement(homeTeam: String, awayTeam: String, officials: Officials) -> String {
+        func name(_ value: String) -> String {
+            let trimmed = value.trimmingCharacters(in: .whitespaces)
+            return trimmed.isEmpty ? "___" : trimmed
+        }
+        let referees = officials.referees.map(name).joined(separator: " and ")
+        let linespeople = officials.linespeople.map(name).joined(separator: " and ")
+        return "The officials for tonight's matchup between \(homeTeam) and \(awayTeam) are Referees \(referees) and Linespeople \(linespeople). Now a message from the JPHL Commissioner, Richard Nault."
+    }
+
     // MARK: - Call
 
     /// One line per sentence, e.g.
@@ -59,6 +73,39 @@ enum CallText {
             "Time of the penalty, \(penalty.time) in \(periodPhrase(penalty.period))."
         ]
         .joined(separator: "\n")
+    }
+
+    // MARK: - End of period
+
+    /// Read out when `period` ends, e.g.
+    /// "Shots this period, Wolves 12 - Bears 9.
+    ///  The score, 2-1 Wolves, heading into the third period."
+    /// `shots` are for `period` alone; `goals` are the totals through the end of it. After
+    /// overtime, a lead is the final score and a tie heads into a shootout.
+    static func endOfPeriod(
+        _ period: GamePeriod,
+        teamNames: [TeamSide: String],
+        shots: [TeamSide: Int],
+        goals: [TeamSide: Int]
+    ) -> String {
+        let homeName = teamNames[.home] ?? TeamSide.home.defaultName
+        let awayName = teamNames[.away] ?? TeamSide.away.defaultName
+        let home = goals[.home] ?? 0
+        let away = goals[.away] ?? 0
+        let score = home == away
+            ? "tied \(home)-\(away)"
+            : "\(max(home, away))-\(min(home, away)) \(home > away ? homeName : awayName)"
+        let shotsLine = "Shots this period, \(homeName) \(shots[.home] ?? 0) - \(awayName) \(shots[.away] ?? 0)."
+        let scoreLine: String
+        switch period {
+        case .first, .second:
+            scoreLine = "The score, \(score), heading into the \(ordinal(period.rawValue + 1)) period."
+        case .third:
+            scoreLine = "The score, \(score), heading into overtime."
+        case .overtime:
+            scoreLine = home == away ? "The score, \(score), heading into a shootout." : "The final score, \(score)."
+        }
+        return [shotsLine, scoreLine].joined(separator: "\n")
     }
 
     /// "12, John Smith", or just "12" when there's no name.

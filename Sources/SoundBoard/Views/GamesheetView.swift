@@ -11,9 +11,14 @@ enum GamesheetField: Hashable {
     case goal(TeamSide, GoalSlot)
     case penaltyNumber(TeamSide, Int)
     case servedBy(TeamSide, Int)
+    case goalie(TeamSide)
+    case goalieSub(TeamSide)
+    case goalieSubTime(TeamSide)
+    case official(Officials.Role, Int)
 
     /// Where Return moves focus: through the scorer/assists, from a penalty's number to its
-    /// served-by number, and otherwise out of the field (which turns hotkeys back on).
+    /// served-by number, through the goalie, sub and sub time, down the officials, and otherwise out of the field
+    /// (which turns hotkeys back on).
     var next: GamesheetField? {
         switch self {
         case .time: nil
@@ -22,13 +27,24 @@ enum GamesheetField: Hashable {
         case .goal(_, .assist2): nil
         case .penaltyNumber(let side, let index): .servedBy(side, index)
         case .servedBy: nil
+        case .goalie(let side): .goalieSub(side)
+        case .goalieSub(let side): .goalieSubTime(side)
+        case .goalieSubTime: nil
+        case .official(let role, let index):
+            if index + 1 < Officials.perRole {
+                .official(role, index + 1)
+            } else if role == .referee {
+                .official(.linesperson, 0)
+            } else {
+                nil
+            }
         }
     }
 }
 
 /// Live game entry ported from the ScoreCard app, laid out the same way: team dropdowns either
 /// side of the score, then each team's column (shots, goal entry, and penalty rows stacked
-/// underneath) either side of the period/time and Game Log (named saves). Hotkeys pause while a
+/// underneath) either side of the period/time and officials. Saved games are the sidebar's playlists. Hotkeys pause while a
 /// text field has focus (ShortcutManager ignores key presses while text is being edited); Return on the last
 /// field, Escape, or a click on empty space ends editing and turns them back on (and deselects
 /// any selected penalty row).
@@ -57,7 +73,7 @@ struct GamesheetView: View {
                     teamColumn(for: .home)
                     VStack(spacing: 12) {
                         PeriodPanel(focus: $focus)
-                        GameLogPanel()
+                        OfficialsPanel(focus: $focus)
                     }
                     .frame(width: centerColumnWidth)
                     teamColumn(for: .away)
@@ -222,9 +238,9 @@ private struct GamesheetButton<Label: View>: View {
     }
 }
 
-/// Rounded input box shared by the time, goal and penalty number fields; outlined in `accent`
+/// Rounded input box shared by the time, goal, penalty and goalkeeper fields; outlined in `accent`
 /// while focused. Clicking it again while focused ends editing, turning hotkeys back on.
-private struct GamesheetTextField: View {
+struct GamesheetTextField: View {
     let placeholder: String
     @Binding var text: String
     let field: GamesheetField
@@ -242,6 +258,15 @@ private struct GamesheetTextField: View {
             .multilineTextAlignment(.center)
             .focused(focus, equals: field)
             .onSubmit { focus.wrappedValue = field.next }
+            .onChange(of: isFocused) { _, focused in
+                guard focused else { return }
+                // A click places the caret after the field editor's mouse tracking, so select all
+                // once that loop ends (default mode) — one click is enough to retype the value.
+                RunLoop.main.perform(inModes: [.default]) {
+                    guard focus.wrappedValue == field else { return }
+                    NSApp.sendAction(#selector(NSResponder.selectAll(_:)), to: nil, from: nil)
+                }
+            }
             .padding(.horizontal, 8)
             .frame(height: height)
             .background(RoundedRectangle(cornerRadius: 8).fill(DesignSystem.Colors.background))
@@ -266,7 +291,7 @@ private struct GamesheetTextField: View {
 
 /// Small name line under a typed jersey number, when the side has a roster: the player's name,
 /// or a warning when the number isn't on it.
-private struct PlayerCaption: View {
+struct PlayerCaption: View {
     @EnvironmentObject private var gameStore: GameStore
     @EnvironmentObject private var rosterStore: RosterStore
 
@@ -292,7 +317,7 @@ private struct PlayerCaption: View {
     }
 }
 
-private struct HotkeysPausedPill: View {
+struct HotkeysPausedPill: View {
     var body: some View {
         Label("Hotkeys paused while typing", systemImage: "keyboard.badge.ellipsis")
             .font(DesignSystem.Typography.caption)
@@ -542,6 +567,7 @@ private struct TeamPanel: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(DesignSystem.Colors.textPrimary)
             }
+            .overlay(alignment: .topLeading) { shotKeyBadge(delta: -1) }
             .help("Remove a shot from this period")
 
             VStack(spacing: 0) {
@@ -562,10 +588,31 @@ private struct TeamPanel: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(DesignSystem.Colors.onAccent)
             }
+            .overlay(alignment: .topLeading) { shotKeyBadge(delta: 1) }
             .help("Add a shot to this period")
         }
         .frame(height: GamesheetLayout.shotsRowHeight)
         .gamesheetCard()
+    }
+
+    /// Small key badge for the shot hotkey, styled like the hotkey bar's but faded so it doesn't
+    /// compete with the +/- icon.
+    @ViewBuilder
+    private func shotKeyBadge(delta: Int) -> some View {
+        if let key = ShortcutManager.shotKey(for: side, delta: delta) {
+            Text(key)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(DesignSystem.Colors.textPrimary)
+                .frame(width: 16, height: 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(DesignSystem.Colors.textSecondary.opacity(0.25))
+                )
+                .padding(.top, 4)
+                .padding(.leading, 4)
+                .opacity(0.2)
+                .allowsHitTesting(false)
+        }
     }
 
     private var goalCard: some View {
@@ -668,6 +715,64 @@ private struct PeriodPanel: View {
                 .help("Type the clock time, e.g. 1245 for 12:45. It's stamped onto goals and penalties.")
             }
             .gamesheetCard()
+        }
+    }
+}
+
+/// Center column, under the clock: the game's two referees and two linespeople, with the
+/// announcement that introduces them underneath, filled in as they're typed.
+private struct OfficialsPanel: View {
+    @EnvironmentObject private var gameStore: GameStore
+
+    var focus: FocusState<GamesheetField?>.Binding
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("Officials")
+                    .font(DesignSystem.Typography.headline)
+                Spacer()
+            }
+
+            ForEach(Officials.Role.allCases, id: \.self) { role in
+                ForEach(0..<Officials.perRole, id: \.self) { index in
+                    row(role: role, index: index)
+                }
+            }
+
+            Text(CallText.officialsAnnouncement(
+                homeTeam: gameStore.teamName(for: .home),
+                awayTeam: gameStore.teamName(for: .away),
+                officials: gameStore.game.officials
+            ))
+            .font(DesignSystem.Typography.caption)
+            .foregroundStyle(DesignSystem.Colors.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
+            .padding(.top, 4)
+        }
+        .gamesheetCard()
+    }
+
+    private func row(role: Officials.Role, index: Int) -> some View {
+        HStack(spacing: 8) {
+            Text(role.label)
+                .font(DesignSystem.Typography.caption)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                .frame(width: 52, alignment: .leading)
+            GamesheetTextField(
+                placeholder: "Name",
+                text: Binding(
+                    get: { gameStore.officialName(role, index: index) },
+                    set: { gameStore.setOfficialName($0, role: role, index: index) }
+                ),
+                field: .official(role, index),
+                focus: focus,
+                accent: DesignSystem.Colors.accentPrimary,
+                font: .system(size: 15, weight: .semibold, design: .rounded),
+                height: 30
+            )
         }
     }
 }
@@ -830,109 +935,5 @@ private struct PenaltyPicker: View {
                 .minimumScaleFactor(0.7)
                 .padding(.horizontal, 4)
         }
-    }
-}
-
-/// Center column, under the clock: the Game Log of saved games. Games save themselves (see
-/// GameStore); the one on screen is the active session, highlighted in purple. Click a save to
-/// open it, or right-click to rename or delete it.
-private struct GameLogPanel: View {
-    @EnvironmentObject private var gameStore: GameStore
-
-    @State private var pendingDelete: SavedGame?
-    @State private var renaming: SavedGame?
-    @State private var renameText = ""
-
-    private let maxListHeight: CGFloat = 240
-
-    var body: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text("Game Log")
-                    .font(DesignSystem.Typography.headline)
-                Spacer()
-                Button("New Game") { gameStore.newGame() }
-                .buttonStyle(.plain)
-                .font(DesignSystem.Typography.caption)
-                .foregroundStyle(DesignSystem.Colors.dangerGlow)
-                .pointerCursor()
-                .help("Start a blank game. The current game stays in the Game Log.")
-            }
-
-            if gameStore.savedGames.isEmpty {
-                Text("Games save here automatically once you start recording.")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    .frame(maxWidth: .infinity, minHeight: 40)
-            } else {
-                ScrollView {
-                    VStack(spacing: 4) {
-                        ForEach(gameStore.savedGames) { save in
-                            row(save)
-                        }
-                    }
-                }
-                .frame(maxHeight: maxListHeight)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .gamesheetCard()
-        .confirmationDialog(
-            "Delete \(pendingDelete?.name ?? "save")?",
-            isPresented: isPresented($pendingDelete),
-            presenting: pendingDelete
-        ) { save in
-            Button("Delete", role: .destructive) { gameStore.deleteSave(save.id) }
-        } message: { save in
-            Text(save.id == gameStore.activeSaveID
-                 ? "This is the game on screen, so the gamesheet will be cleared too. This can't be undone."
-                 : "This can't be undone.")
-        }
-        .alert("Rename Save", isPresented: isPresented($renaming), presenting: renaming) { save in
-            TextField("Name", text: $renameText)
-            Button("Cancel", role: .cancel) {}
-            Button("Rename") { gameStore.renameSave(save.id, to: renameText) }
-        }
-    }
-
-    private func row(_ save: SavedGame) -> some View {
-        let isActive = save.id == gameStore.activeSaveID
-        return VStack(alignment: .leading, spacing: 1) {
-            Text(save.name)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                .lineLimit(1)
-            Text("\(save.goalCount(for: .home))–\(save.goalCount(for: .away)) · \(save.updatedAt.formatted(date: .omitted, time: .shortened))")
-                .font(DesignSystem.Typography.captionBold.monospacedDigit())
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isActive ? DesignSystem.Colors.accentPrimary.opacity(0.35) : DesignSystem.Colors.background.opacity(0.6))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(DesignSystem.Colors.accentPrimary, lineWidth: isActive ? 2 : 0)
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard !isActive else { return }
-            gameStore.loadSave(save.id)
-        }
-        .pointerCursor()
-        .help(isActive ? "The active session" : "Open this game")
-        .contextMenu {
-            Button("Rename…") {
-                renameText = save.name
-                renaming = save
-            }
-            Button("Delete…", role: .destructive) { pendingDelete = save }
-        }
-    }
-
-    private func isPresented(_ item: Binding<SavedGame?>) -> Binding<Bool> {
-        Binding(get: { item.wrappedValue != nil }, set: { if !$0 { item.wrappedValue = nil } })
     }
 }

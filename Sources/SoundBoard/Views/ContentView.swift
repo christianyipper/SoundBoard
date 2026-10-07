@@ -9,34 +9,21 @@ struct ContentView: View {
     @Environment(\.openSettings) private var openSettings
 
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var selectedPlaylistID: UUID?
     @State private var isImporting = false
     @State private var importError: String?
     @State private var mainMode: MainMode = .files
 
-    private var selectedPlaylist: Playlist? {
-        playlistStore.playlists.first { $0.id == selectedPlaylistID }
-    }
-
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(selectedPlaylistID: $selectedPlaylistID)
+            SidebarView()
         } detail: {
             MainModePager(mode: $mainMode) {
                 HotkeyBarView(mode: $mainMode)
-                MusicPlayerView()
+                MusicPlayerView(playlist: playlistStore.library)
             } page: { mode in
                 switch mode {
                 case .files:
-                    if let selectedPlaylist {
-                        SoundGridView(playlist: selectedPlaylist)
-                    } else {
-                        ContentUnavailableView(
-                            "No Playlist Selected",
-                            systemImage: "music.note.list",
-                            description: Text("Choose a playlist from the sidebar, or create a new one.")
-                        )
-                    }
+                    SoundGridView(playlist: playlistStore.library)
                 case .gamesheet:
                     GamesheetView()
                 case .call:
@@ -53,8 +40,7 @@ struct ContentView: View {
                 } label: {
                     Label("Import Audio…", systemImage: "square.and.arrow.down")
                 }
-                .disabled(selectedPlaylistID == nil)
-                .help(selectedPlaylistID == nil ? "Select a playlist first" : "Import audio files into this playlist. Use the folder button above the sounds to add folders.")
+                .help("Import audio files into the sound library every game shares. Use the folder button above the sounds to add folders.")
             }
 
             ToolbarItem {
@@ -92,11 +78,6 @@ struct ContentView: View {
         .onChange(of: mainMode, initial: true) { _, mode in
             hotkeyBarStore.selectPreset(named: mode.hotkeyPresetName)
         }
-        .onAppear {
-            if selectedPlaylistID == nil {
-                selectedPlaylistID = playlistStore.playlists.first?.id
-            }
-        }
         .overlay {
             if microphoneManager.isLive {
                 PulsingMicBorder()
@@ -105,11 +86,10 @@ struct ContentView: View {
     }
 
     private func handleImportResult(_ result: Result<[URL], Error>) {
-        guard let playlistID = selectedPlaylistID else { return }
         switch result {
         case .success(let urls):
             do {
-                try playlistStore.importSounds(from: urls, into: playlistID)
+                try playlistStore.importSounds(from: urls, into: playlistStore.library.id)
             } catch {
                 importError = error.localizedDescription
             }

@@ -3,9 +3,10 @@ import Foundation
 /// Owns the live game shown in the Gamesheet view (ported from the ScoreCard app): team names and
 /// rosters, the current period and clock time, shots per period, and the recorded goals and
 /// penalties. The recorded game is saved to disk so it survives a relaunch mid-game; the
-/// in-progress goal/penalty inputs are not. It also keeps the Game Log: named saves of past games.
-/// Saving is automatic: the first change to a blank game creates a save for it, which becomes the
-/// active session, and every later change is copied into that save as it happens.
+/// in-progress goal/penalty inputs are not. It also keeps the saved games, which the sidebar lists
+/// as playlists (every one shares the same sound library). Saving is automatic: "New Game" (or the
+/// first change to a blank game) creates a save, which becomes the active session, and every later
+/// change is copied into that save as it happens.
 final class GameStore: ObservableObject {
     struct Game: Codable, Equatable {
         var teamNames: [TeamSide: String] = [.home: TeamSide.home.defaultName, .away: TeamSide.away.defaultName]
@@ -14,6 +15,8 @@ final class GameStore: ObservableObject {
         /// Up to four digits typed into the time field, e.g. "1245" for 12:45.
         var periodTimeDigits = ""
         var shots: [TeamSide: [GamePeriod: Int]] = [:]
+        var goalkeepers: [TeamSide: GoalkeeperEntry] = [:]
+        var officials = Officials()
         var goals: [GoalEntry] = []
         var penalties: [PenaltyEntry] = []
     }
@@ -25,7 +28,7 @@ final class GameStore: ObservableObject {
         }
     }
 
-    /// The Game Log, newest first.
+    /// Every saved game, newest first.
     @Published private(set) var savedGames: [SavedGame] = []
     /// The save the live game belongs to; nil while it's unsaved.
     @Published private(set) var activeSaveID: UUID?
@@ -105,8 +108,8 @@ final class GameStore: ObservableObject {
         var assists = 0
     }
 
-    /// Goals and assists recorded for `team` (pass the league's latest copy) across every game in
-    /// the Game Log, keyed by normalized jersey number. A goal stays pending until the league's
+    /// Goals and assists recorded for `team` (pass the league's latest copy) across every saved
+    /// game, keyed by normalized jersey number. A goal stays pending until the league's
     /// posted games played for the team moves past what it was when the goal was recorded, which
     /// is when a scraper refresh brings in the official stats for that game.
     func pendingStats(for team: RosterTeam) -> [String: PendingStats] {
@@ -155,14 +158,21 @@ final class GameStore: ObservableObject {
     /// The time field's text: digits with a colon before the last two once there are more than
     /// two ("245" → "2:45", "1245" → "12:45").
     var periodTimeText: String {
-        let digits = game.periodTimeDigits
-        guard digits.count > 2 else { return digits }
-        return "\(digits.dropLast(2)):\(digits.suffix(2))"
+        Self.clockText(fromDigits: game.periodTimeDigits)
     }
 
     /// Keeps only the first four digits of whatever was typed (so "12:45" and "1245" both work).
     func setPeriodTimeText(_ text: String) {
-        game.periodTimeDigits = String(text.filter(\.isASCIIDigit).prefix(4))
+        game.periodTimeDigits = Self.clockDigits(from: text)
+    }
+
+    static func clockText(fromDigits digits: String) -> String {
+        guard digits.count > 2 else { return digits }
+        return "\(digits.dropLast(2)):\(digits.suffix(2))"
+    }
+
+    static func clockDigits(from text: String) -> String {
+        String(text.filter(\.isASCIIDigit).prefix(4))
     }
 
     /// The time stamped onto goals and penalties, always MM:SS ("245" → "02:45").
@@ -185,6 +195,37 @@ final class GameStore: ObservableObject {
     func addShot(for side: TeamSide, delta: Int = 1) {
         let updated = max(0, shotCount(for: side, period: game.currentPeriod) + delta)
         game.shots[side, default: [:]][game.currentPeriod] = updated
+    }
+
+    // MARK: - Goalkeepers
+
+    func goalkeepers(for side: TeamSide) -> GoalkeeperEntry {
+        game.goalkeepers[side] ?? GoalkeeperEntry()
+    }
+
+    func updateGoalkeepers(for side: TeamSide, _ change: (inout GoalkeeperEntry) -> Void) {
+        var entry = goalkeepers(for: side)
+        change(&entry)
+        game.goalkeepers[side] = entry == GoalkeeperEntry() ? nil : entry
+    }
+
+    /// The sub time field's text, formatted like `periodTimeText`.
+    func goalieSubTimeText(for side: TeamSide) -> String {
+        Self.clockText(fromDigits: goalkeepers(for: side).subTimeDigits)
+    }
+
+    func setGoalieSubTimeText(_ text: String, for side: TeamSide) {
+        updateGoalkeepers(for: side) { $0.subTimeDigits = Self.clockDigits(from: text) }
+    }
+
+    // MARK: - Officials
+
+    func officialName(_ role: Officials.Role, index: Int) -> String {
+        game.officials[role][index]
+    }
+
+    func setOfficialName(_ name: String, role: Officials.Role, index: Int) {
+        game.officials[role][index] = name
     }
 
     // MARK: - Goals
@@ -301,17 +342,32 @@ final class GameStore: ObservableObject {
 
     // MARK: - Game
 
-    /// Clears everything back to a blank, unsaved game. The active save (if any) keeps its contents.
+    /// Starts a blank game with its own save, so it's listed right away. The previous save keeps
+    /// its contents.
     func newGame() {
+        let save = SavedGame(name: SavedGame.automaticName(for: Game().record, createdAt: Date()), record: Game().record)
+        savedGames.insert(save, at: 0)
+        activeSaveID = save.id
+        resetLiveGame(to: Game())
+        scheduleSave()
+    }
+
+    /// Clears the live game and inputs without saving anything; the next change saves it.
+    private func clearToUnsavedGame() {
         activeSaveID = nil
-        game = Game()
+        resetLiveGame(to: Game())
+    }
+
+    /// Replaces the live game, clearing any half-typed goal/penalty inputs.
+    private func resetLiveGame(to newGame: Game) {
+        game = newGame
         goalDrafts = [:]
         goalStrengths = [:]
         penaltyDrafts = Self.emptyPenaltyDrafts()
         activePenaltyRow = nil
     }
 
-    // MARK: - Game Log
+    // MARK: - Saved games
 
     /// Replaces the live game with a save's contents and makes it the active session. The period
     /// and clock start over, and any half-typed goal/penalty inputs are cleared.
@@ -320,11 +376,7 @@ final class GameStore: ObservableObject {
         activeSaveID = id
         var loaded = Game()
         loaded.record = save.record
-        game = loaded
-        goalDrafts = [:]
-        goalStrengths = [:]
-        penaltyDrafts = Self.emptyPenaltyDrafts()
-        activePenaltyRow = nil
+        resetLiveGame(to: loaded)
     }
 
     /// An empty name keeps the old one.
@@ -336,12 +388,16 @@ final class GameStore: ObservableObject {
         scheduleSave()
     }
 
-    /// Deleting the active save also clears the gamesheet (otherwise the next change would just
-    /// save it again).
+    /// Deleting the active save opens the newest remaining one, or clears the gamesheet when none
+    /// are left (otherwise the next change would just save it again).
     func deleteSave(_ id: UUID) {
         savedGames.removeAll { $0.id == id }
         if activeSaveID == id {
-            newGame()
+            if let next = savedGames.first {
+                loadSave(next.id)
+            } else {
+                clearToUnsavedGame()
+            }
         }
         scheduleSave()
     }
@@ -403,5 +459,21 @@ final class GameStore: ObservableObject {
     private static func loadSaves(from url: URL) -> SavesFile? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(SavesFile.self, from: data)
+    }
+}
+
+// Games saved before goalkeepers or officials were tracked have no `goalkeepers`/`officials` key.
+extension GameStore.Game {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        teamNames = try container.decode([TeamSide: String].self, forKey: .teamNames)
+        teamRosters = try container.decode([TeamSide: RosterTeam].self, forKey: .teamRosters)
+        currentPeriod = try container.decode(GamePeriod.self, forKey: .currentPeriod)
+        periodTimeDigits = try container.decode(String.self, forKey: .periodTimeDigits)
+        shots = try container.decode([TeamSide: [GamePeriod: Int]].self, forKey: .shots)
+        goalkeepers = try container.decodeIfPresent([TeamSide: GoalkeeperEntry].self, forKey: .goalkeepers) ?? [:]
+        officials = try container.decodeIfPresent(Officials.self, forKey: .officials) ?? Officials()
+        goals = try container.decode([GoalEntry].self, forKey: .goals)
+        penalties = try container.decode([PenaltyEntry].self, forKey: .penalties)
     }
 }

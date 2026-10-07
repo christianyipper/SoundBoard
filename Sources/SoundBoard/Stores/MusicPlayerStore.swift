@@ -1,20 +1,21 @@
 import Foundation
 import Combine
 
-/// Drives the music player section below the hotkey bar: pick a playlist, shuffle its sounds into
+/// Drives the music player section below the hotkey bar: pick a folder, shuffle its sounds into
 /// a fixed play order, and toggle play/pause on that shuffled queue (via the spacebar or the
 /// player's own button). Unlike a normal player, pausing doesn't just stop where it is — it also
 /// cues up the next track, so the next play starts a fresh song rather than resuming this one. A
 /// track that finishes on its own (without the user pausing) advances and keeps playing
 /// automatically — crossfading into the next track if the "cross-fade between tracks" setting is
 /// on, timed to start before the current track's audio actually ends so the two overlap. The
-/// shuffle order is cached per playlist so switching away and back doesn't reshuffle; only the
+/// shuffle order is cached per folder so switching away and back doesn't reshuffle; only the
 /// explicit "reset" action does that.
 final class MusicPlayerStore: ObservableObject {
-    @Published var selectedPlaylistID: UUID? {
+    /// The folder (`SoundTab`) whose sounds are shuffled and played.
+    @Published var selectedFolderID: UUID? {
         didSet {
-            guard selectedPlaylistID != oldValue else { return }
-            selectPlaylist(selectedPlaylistID)
+            guard selectedFolderID != oldValue else { return }
+            selectFolder(selectedFolderID)
         }
     }
     @Published private(set) var currentSoundID: UUID?
@@ -26,7 +27,7 @@ final class MusicPlayerStore: ObservableObject {
 
     private let playlistStore: PlaylistStore
     private let audioPlayerManager: AudioPlayerManager
-    /// Shuffled play order per playlist, cached so switching playlists and back doesn't reshuffle.
+    /// Shuffled play order per folder, cached so switching folders and back doesn't reshuffle.
     private var shuffleOrders: [UUID: [UUID]] = [:]
     private var currentIndices: [UUID: Int] = [:]
     /// Fires shortly before the currently-playing track's audio actually ends, to kick off a
@@ -70,7 +71,7 @@ final class MusicPlayerStore: ObservableObject {
     /// Starts the cued track if idle, or stops the current one (fading per settings) and cues the
     /// next track in the shuffle order if playing. Bound to the spacebar and the player's button.
     func togglePlayPause() {
-        guard let selectedPlaylistID else { return }
+        guard let selectedFolderID else { return }
         cancelScheduledCrossFade()
         if isPlaying {
             isPlaying = false
@@ -79,10 +80,10 @@ final class MusicPlayerStore: ObservableObject {
             if let currentSoundID {
                 audioPlayerManager.pause(currentSoundID)
             }
-            advanceIndex(for: selectedPlaylistID)
-            currentSoundID = soundID(atCurrentIndexOf: selectedPlaylistID)
+            advanceIndex(for: selectedFolderID)
+            currentSoundID = soundID(atCurrentIndexOf: selectedFolderID)
         } else {
-            play(playlistID: selectedPlaylistID)
+            play(folderID: selectedFolderID)
         }
     }
 
@@ -90,16 +91,16 @@ final class MusicPlayerStore: ObservableObject {
     /// plays it immediately if a track was already playing, or just cues it (silent, awaiting
     /// Play) if playback was paused.
     func skipToNext() {
-        guard let selectedPlaylistID else { return }
+        guard let selectedFolderID else { return }
         cancelScheduledCrossFade()
         let wasPlaying = isPlaying
         if isPlaying, let currentSoundID {
             audioPlayerManager.pause(currentSoundID)
         }
-        advanceIndex(for: selectedPlaylistID)
-        currentSoundID = soundID(atCurrentIndexOf: selectedPlaylistID)
+        advanceIndex(for: selectedFolderID)
+        currentSoundID = soundID(atCurrentIndexOf: selectedFolderID)
         if wasPlaying {
-            play(playlistID: selectedPlaylistID)
+            play(folderID: selectedFolderID)
         } else {
             isPlaying = false
             trackStartDate = nil
@@ -110,16 +111,16 @@ final class MusicPlayerStore: ObservableObject {
     /// Jumps to the previous track in the shuffle order, preserving the current play/pause state
     /// the same way skipToNext() does.
     func skipToPrevious() {
-        guard let selectedPlaylistID else { return }
+        guard let selectedFolderID else { return }
         cancelScheduledCrossFade()
         let wasPlaying = isPlaying
         if isPlaying, let currentSoundID {
             audioPlayerManager.pause(currentSoundID)
         }
-        retreatIndex(for: selectedPlaylistID)
-        currentSoundID = soundID(atCurrentIndexOf: selectedPlaylistID)
+        retreatIndex(for: selectedFolderID)
+        currentSoundID = soundID(atCurrentIndexOf: selectedFolderID)
         if wasPlaying {
-            play(playlistID: selectedPlaylistID)
+            play(folderID: selectedFolderID)
         } else {
             isPlaying = false
             trackStartDate = nil
@@ -127,25 +128,21 @@ final class MusicPlayerStore: ObservableObject {
         }
     }
 
-    /// Re-shuffles the selected playlist's play order and cues its first track. Stops playback
-    /// first if that playlist is currently playing.
+    /// Re-shuffles the selected folder's play order and cues its first track. Ignored while
+    /// music is playing, so a stray click can't cut off the current track.
     func resetShuffle() {
-        guard let selectedPlaylistID else { return }
+        guard let selectedFolderID, !isPlaying else { return }
         cancelScheduledCrossFade()
-        if isPlaying, let currentSoundID {
-            audioPlayerManager.pause(currentSoundID)
-            isPlaying = false
-        }
-        shuffleOrders[selectedPlaylistID] = nil
-        currentIndices[selectedPlaylistID] = nil
+        shuffleOrders[selectedFolderID] = nil
+        currentIndices[selectedFolderID] = nil
         trackStartDate = nil
         elapsedTime = 0
-        currentSoundID = cueFirstTrack(for: selectedPlaylistID)
+        currentSoundID = cueFirstTrack(for: selectedFolderID)
     }
 
     // MARK: - Private
 
-    private func selectPlaylist(_ playlistID: UUID?) {
+    private func selectFolder(_ folderID: UUID?) {
         cancelScheduledCrossFade()
         if isPlaying, let currentSoundID {
             audioPlayerManager.pause(currentSoundID)
@@ -153,7 +150,7 @@ final class MusicPlayerStore: ObservableObject {
         isPlaying = false
         trackStartDate = nil
         elapsedTime = 0
-        currentSoundID = playlistID.flatMap { cueFirstTrack(for: $0) }
+        currentSoundID = folderID.flatMap { cueFirstTrack(for: $0) }
     }
 
     private func tickElapsedTime() {
@@ -161,37 +158,37 @@ final class MusicPlayerStore: ObservableObject {
         elapsedTime = Date().timeIntervalSince(trackStartDate)
     }
 
-    private func play(playlistID: UUID) {
-        let candidateID = currentSoundID ?? cueFirstTrack(for: playlistID)
+    private func play(folderID: UUID) {
+        let candidateID = currentSoundID ?? cueFirstTrack(for: folderID)
         guard let candidateID, let sound = playlistStore.sound(withID: candidateID) else { return }
         currentSoundID = candidateID
         isPlaying = true
         trackStartDate = Date()
         elapsedTime = 0
         audioPlayerManager.play(sound, fileURL: playlistStore.url(for: sound))
-        scheduleCrossFadeIfNeeded(from: candidateID, playlistID: playlistID)
+        scheduleCrossFadeIfNeeded(from: candidateID, folderID: folderID)
     }
 
     /// Advances the queue and plays the next track from scratch — the fallback used when there's
     /// no crossfade configured, so a track's natural completion (detected via the playingIDs sink
     /// above) is what drives moving on to the next one.
     private func advanceAndPlay() {
-        guard let selectedPlaylistID else { return }
-        advanceIndex(for: selectedPlaylistID)
-        currentSoundID = soundID(atCurrentIndexOf: selectedPlaylistID)
-        play(playlistID: selectedPlaylistID)
+        guard let selectedFolderID else { return }
+        advanceIndex(for: selectedFolderID)
+        currentSoundID = soundID(atCurrentIndexOf: selectedFolderID)
+        play(folderID: selectedFolderID)
     }
 
     /// Schedules a crossfade into the next queued track, timed to fire just before `soundID`'s
     /// audio actually finishes, so the two overlap. No-ops when the crossfade setting is off (0)
     /// or the track's duration isn't known yet.
-    private func scheduleCrossFadeIfNeeded(from soundID: UUID, playlistID: UUID) {
+    private func scheduleCrossFadeIfNeeded(from soundID: UUID, folderID: UUID) {
         let crossFadeDuration = audioPlayerManager.crossFadeDuration
         guard crossFadeDuration > 0, let duration = audioPlayerManager.duration(for: soundID) else { return }
 
         let delay = max(duration - crossFadeDuration, 0)
         let workItem = DispatchWorkItem { [weak self] in
-            self?.crossFadeToNext(from: soundID, playlistID: playlistID)
+            self?.crossFadeToNext(from: soundID, folderID: folderID)
         }
         crossFadeWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
@@ -199,17 +196,17 @@ final class MusicPlayerStore: ObservableObject {
 
     /// Advances the queue and crossfades from `fromSoundID` into the newly-cued track, then
     /// schedules the next crossfade in turn. Bails out if playback state has since moved on
-    /// (paused, reset, or switched playlists) rather than what this was scheduled for.
-    private func crossFadeToNext(from fromSoundID: UUID, playlistID: UUID) {
-        guard isPlaying, currentSoundID == fromSoundID, selectedPlaylistID == playlistID else { return }
-        advanceIndex(for: playlistID)
-        guard let nextSoundID = soundID(atCurrentIndexOf: playlistID),
+    /// (paused, reset, or switched folders) rather than what this was scheduled for.
+    private func crossFadeToNext(from fromSoundID: UUID, folderID: UUID) {
+        guard isPlaying, currentSoundID == fromSoundID, selectedFolderID == folderID else { return }
+        advanceIndex(for: folderID)
+        guard let nextSoundID = soundID(atCurrentIndexOf: folderID),
               let sound = playlistStore.sound(withID: nextSoundID) else { return }
         currentSoundID = nextSoundID
         trackStartDate = Date()
         elapsedTime = 0
         audioPlayerManager.crossFade(from: fromSoundID, to: sound, fileURL: playlistStore.url(for: sound))
-        scheduleCrossFadeIfNeeded(from: nextSoundID, playlistID: playlistID)
+        scheduleCrossFadeIfNeeded(from: nextSoundID, folderID: folderID)
     }
 
     private func cancelScheduledCrossFade() {
@@ -217,58 +214,57 @@ final class MusicPlayerStore: ObservableObject {
         crossFadeWorkItem = nil
     }
 
-    /// Ensures a shuffle order exists for `playlistID` (reusing the cached one if present),
+    /// Ensures a shuffle order exists for `folderID` (reusing the cached one if present),
     /// resets its index to the start, and returns the sound now cued at that position.
-    private func cueFirstTrack(for playlistID: UUID) -> UUID? {
-        let order = shuffleOrder(for: playlistID)
-        currentIndices[playlistID] = 0
+    private func cueFirstTrack(for folderID: UUID) -> UUID? {
+        let order = shuffleOrder(for: folderID)
+        currentIndices[folderID] = 0
         return order.first
     }
 
-    private func soundID(atCurrentIndexOf playlistID: UUID) -> UUID? {
-        let order = shuffleOrder(for: playlistID)
+    private func soundID(atCurrentIndexOf folderID: UUID) -> UUID? {
+        let order = shuffleOrder(for: folderID)
         guard !order.isEmpty else { return nil }
-        let index = currentIndices[playlistID] ?? 0
+        let index = currentIndices[folderID] ?? 0
         return order[index]
     }
 
     /// Moves to the next position in the shuffle order, wrapping back to the start once every
     /// track has played — replaying the same shuffle order rather than generating a new one.
-    private func advanceIndex(for playlistID: UUID) {
-        let order = shuffleOrder(for: playlistID)
+    private func advanceIndex(for folderID: UUID) {
+        let order = shuffleOrder(for: folderID)
         guard !order.isEmpty else { return }
-        let next = (currentIndices[playlistID] ?? 0) + 1
-        currentIndices[playlistID] = next % order.count
+        let next = (currentIndices[folderID] ?? 0) + 1
+        currentIndices[folderID] = next % order.count
     }
 
     /// Moves to the previous position in the shuffle order, wrapping to the end.
-    private func retreatIndex(for playlistID: UUID) {
-        let order = shuffleOrder(for: playlistID)
+    private func retreatIndex(for folderID: UUID) {
+        let order = shuffleOrder(for: folderID)
         guard !order.isEmpty else { return }
-        let current = currentIndices[playlistID] ?? 0
-        currentIndices[playlistID] = (current - 1 + order.count) % order.count
+        let current = currentIndices[folderID] ?? 0
+        currentIndices[folderID] = (current - 1 + order.count) % order.count
     }
 
-    /// Returns the cached shuffle order for `playlistID`, dropping any sounds that were since
-    /// removed from the playlist, or generating (and caching) a fresh shuffled order if none
-    /// exists yet.
-    private func shuffleOrder(for playlistID: UUID) -> [UUID] {
-        let currentSoundIDs = playlistStore.playlists.first { $0.id == playlistID }?.allSounds.map(\.id) ?? []
+    /// Returns the cached shuffle order for `folderID`, dropping any sounds that were
+    /// since removed from it, or generating (and caching) a fresh shuffled order if none exists yet.
+    private func shuffleOrder(for folderID: UUID) -> [UUID] {
+        let currentSoundIDs = playlistStore.folder(withID: folderID)?.sounds.map(\.id) ?? []
 
-        if let existing = shuffleOrders[playlistID] {
+        if let existing = shuffleOrders[folderID] {
             let validIDs = Set(currentSoundIDs)
             let filtered = existing.filter { validIDs.contains($0) }
             if filtered.count != existing.count {
-                shuffleOrders[playlistID] = filtered
-                if let index = currentIndices[playlistID], index >= filtered.count {
-                    currentIndices[playlistID] = 0
+                shuffleOrders[folderID] = filtered
+                if let index = currentIndices[folderID], index >= filtered.count {
+                    currentIndices[folderID] = 0
                 }
             }
-            return shuffleOrders[playlistID] ?? []
+            return shuffleOrders[folderID] ?? []
         }
 
         let shuffled = currentSoundIDs.shuffled()
-        shuffleOrders[playlistID] = shuffled
+        shuffleOrders[folderID] = shuffled
         return shuffled
     }
 }

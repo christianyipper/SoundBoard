@@ -33,7 +33,7 @@ enum MainMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Hotkey rack: a top bar (preset tabs, Files/Gamesheet/Call toggle, and the "- Key"/"+ Key"
+/// Hotkey rack: a top bar (preset tabs, Files/Gamesheet/Call toggle, and the − / + key
 /// buttons) above a single row of the selected preset's hotkey slots (keys 1-9 then 0). Drag any sound tile from the grid
 /// onto a slot to assign it; press the matching key, or click the slot, to toggle play/pause. A
 /// slot's title is editable via its context menu.
@@ -84,7 +84,7 @@ private struct HotkeyTopBar: View {
 
             Spacer(minLength: 12)
 
-            HStack(spacing: 16) {
+            HStack(alignment: .bottom, spacing: 16) {
                 SegmentedTabs(selection: $mode, options: MainMode.allCases) { mode in
                     Label(mode.title, systemImage: mode.icon)
                 }
@@ -92,13 +92,12 @@ private struct HotkeyTopBar: View {
                 .help("Files and Gamesheet switch hotkeys to Default; Call switches them to Goal Call")
 
                 HStack(spacing: 6) {
-                    KeyCountButton(title: "- Key", isEnabled: hotkeyBarStore.canRemoveKey, action: hotkeyBarStore.removeLastKey)
+                    KeyCountButton(systemImage: "minus", accessibilityLabel: "Remove Key", isEnabled: hotkeyBarStore.canRemoveKey, action: hotkeyBarStore.removeLastKey)
                         .help("Hide the last hotkey (its sound is kept for when you add it back)")
-                    KeyCountButton(title: "+ Key", isEnabled: hotkeyBarStore.canAddKey, action: hotkeyBarStore.addKey)
+                    KeyCountButton(systemImage: "plus", accessibilityLabel: "Add Key", isEnabled: hotkeyBarStore.canAddKey, action: hotkeyBarStore.addKey)
                         .help("Add the next hotkey, up to key 0")
                 }
             }
-            .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 8)
@@ -108,9 +107,11 @@ private struct HotkeyTopBar: View {
     }
 }
 
-/// "- Key" / "+ Key" button beside the view toggle; only used in the dark purple header.
+/// Square − / + button beside the view toggle that removes or adds a hotkey; only used in the
+/// dark purple header.
 private struct KeyCountButton: View {
-    let title: String
+    let systemImage: String
+    let accessibilityLabel: String
     let isEnabled: Bool
     let action: () -> Void
 
@@ -118,12 +119,12 @@ private struct KeyCountButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .padding(.horizontal, 12)
-                .frame(height: 28)
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .bold))
+                .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }
+        .accessibilityLabel(accessibilityLabel)
         .buttonStyle(.plain)
         .foregroundStyle(DesignSystem.Colors.headerText)
         .background(

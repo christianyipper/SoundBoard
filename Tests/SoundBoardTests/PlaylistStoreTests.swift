@@ -14,21 +14,36 @@ final class PlaylistStoreTests: XCTestCase {
         super.tearDown()
     }
 
-    func testAddRenameDeletePlaylist() {
+    func testFreshStoreHasOneEmptyLibrary() {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Sound Effects")
         XCTAssertEqual(store.playlists.count, 1)
+        XCTAssertEqual(store.library.name, PlaylistStore.libraryName)
+        XCTAssertTrue(store.library.allSounds.isEmpty)
+    }
 
-        store.renamePlaylist(playlist.id, to: "Effects")
-        XCTAssertEqual(store.playlists.first?.name, "Effects")
+    func testOlderPlaylistsMergeIntoOneLibraryKeepingEverySound() {
+        let a = Sound(name: "A", fileName: "a.wav")
+        let b = Sound(name: "B", fileName: "b.wav")
+        let c = Sound(name: "C", fileName: "c.wav")
+        let d = Sound(name: "D", fileName: "d.wav")
+        var first = Playlist(name: "Game 1", sounds: [a])
+        first.tabs.append(SoundTab(name: "Goals", sounds: [b]))
+        var second = Playlist(name: "Game 2", sounds: [c])
+        second.tabs.append(SoundTab(name: "Goals", sounds: [d]))
+        second.tabs.append(SoundTab(name: "Intros"))
 
-        store.deletePlaylist(playlist.id)
-        XCTAssertTrue(store.playlists.isEmpty)
+        let library = PlaylistStore.mergedLibrary(from: [first, second])
+
+        XCTAssertEqual(library.id, first.id)
+        XCTAssertEqual(library.name, PlaylistStore.libraryName)
+        XCTAssertEqual(library.tabs.map(\.name), [Playlist.defaultTabName, "Goals", "Intros"])
+        XCTAssertEqual(library.sounds.map(\.name), ["A", "C"])
+        XCTAssertEqual(library.tabs[1].sounds.map(\.name), ["B", "D"], "same-named folders merge")
     }
 
     func testImportSoundsCopiesFileAndAppendsToPlaylist() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
 
         let sourceURL = tempDirectory.appendingPathComponent("source.wav")
         try Data([0x01, 0x02, 0x03]).write(to: sourceURL)
@@ -44,7 +59,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testRemoveSoundDeletesFileAndRecord() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
         let sourceURL = tempDirectory.appendingPathComponent("source.wav")
         try Data([0x01]).write(to: sourceURL)
         let sound = try store.importSounds(from: [sourceURL], into: playlist.id).first!
@@ -58,7 +73,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testShortcutAssignmentAndConflictLookup() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
         let sourceA = tempDirectory.appendingPathComponent("a.wav")
         let sourceB = tempDirectory.appendingPathComponent("b.wav")
         try Data([0x01]).write(to: sourceA)
@@ -79,7 +94,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testSoundLookupByIDAcrossPlaylists() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
         let sourceURL = tempDirectory.appendingPathComponent("a.wav")
         try Data([0x01]).write(to: sourceURL)
         let sound = try store.importSounds(from: [sourceURL], into: playlist.id).first!
@@ -103,7 +118,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testImportFolderContentsPutsTopLevelFilesInDefaultTab() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
 
         let dropRoot = tempDirectory.appendingPathComponent("DropFolder")
         try FileManager.default.createDirectory(at: dropRoot, withIntermediateDirectories: true)
@@ -119,7 +134,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testImportFolderContentsCreatesFlatTabsForNestedSubfolders() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
 
         // Folder1 (dropped) > Folder2 > Folder3, per the nested-subfolder example.
         let folder1 = tempDirectory.appendingPathComponent("Folder1")
@@ -142,7 +157,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testImportFolderContentsMergesSameNamedSubfoldersIntoOneTab() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
 
         let dropRoot = tempDirectory.appendingPathComponent("DropFolder")
         let subA = dropRoot.appendingPathComponent("Category/A")
@@ -178,7 +193,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testImportFolderAddsFolderAsNewTabNamedAfterIt() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
         let folder = try makeFolder("Horns", files: ["a.wav", "b.mp3"], subfolders: ["Short": ["c.wav"]])
 
         try store.importFolder(folder, into: playlist.id)
@@ -192,7 +207,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testImportFolderReplacingTabSwapsNameAndContentsAndDeletesOldFiles() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
         try store.importFolder(try makeFolder("Old", files: ["old.wav"]), into: playlist.id)
         let oldTab = try XCTUnwrap(store.playlists.first?.tabs.last)
         let oldFileURL = store.url(for: try XCTUnwrap(oldTab.sounds.first))
@@ -209,7 +224,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testImportFolderNeverReplacesRootTab() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
         let sourceURL = tempDirectory.appendingPathComponent("loose.wav")
         try Data([0x01]).write(to: sourceURL)
         try store.importSounds(from: [sourceURL], into: playlist.id)
@@ -224,7 +239,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testSoundOperationsWorkAcrossTabs() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
 
         let wrapper = tempDirectory.appendingPathComponent("Wrapper")
         let folder = wrapper.appendingPathComponent("Sub")
@@ -250,7 +265,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testAddTabAppendsEmptyTab() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
 
         let tab = store.addTab(name: "Extras", toPlaylist: playlist.id)
 
@@ -260,7 +275,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testDeleteTabRemovesTabAndItsSoundFiles() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
         let tab = store.addTab(name: "Extras", toPlaylist: playlist.id)!
         let sourceURL = tempDirectory.appendingPathComponent("extra.wav")
         try Data([0x01]).write(to: sourceURL)
@@ -275,7 +290,7 @@ final class PlaylistStoreTests: XCTestCase {
 
     func testDeleteTabRefusesToRemoveTheLastRemainingTab() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = store.addPlaylist(name: "Effects")
+        let playlist = store.library
         let onlyTabID = store.playlists.first!.tabs.first!.id
 
         store.deleteTab(onlyTabID, from: playlist.id)
@@ -294,13 +309,14 @@ final class PlaylistStoreTests: XCTestCase {
         XCTAssertEqual(playlist.sounds.map(\.name), ["Old"])
     }
 
-    func testPersistenceRoundTrip() {
+    func testPersistenceRoundTrip() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        store.addPlaylist(name: "Effects")
+        let sourceURL = tempDirectory.appendingPathComponent("a.wav")
+        try Data([0x01]).write(to: sourceURL)
+        try store.importSounds(from: [sourceURL], into: store.library.id)
         store.flush()
 
         let reloaded = PlaylistStore(baseDirectory: tempDirectory)
-        XCTAssertEqual(reloaded.playlists.count, 1)
-        XCTAssertEqual(reloaded.playlists.first?.name, "Effects")
+        XCTAssertEqual(reloaded.playlists, store.playlists)
     }
 }

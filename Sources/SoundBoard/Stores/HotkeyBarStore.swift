@@ -4,7 +4,7 @@ import Foundation
 /// There are two fixed presets, each with its own slot titles and sound assignments:
 /// "Default" (used by the Files and Gamesheet views) and "Goal Call" (used by the Call view); the
 /// main view picks which one is active via `selectPreset(named:)`. Each preset shows its own
-/// number of keys (five to start), changed with "+ Key"/"- Key" or by removing a hotkey from its
+/// number of keys (five to start), changed with the header's + / − buttons or by removing a hotkey from its
 /// context menu; keys past that count are hidden and inactive. The microphone toggle is a separate, fixed "V" hotkey handled by
 /// ShortcutManager directly, independent of any preset.
 final class HotkeyBarStore: ObservableObject {
@@ -29,7 +29,7 @@ final class HotkeyBarStore: ObservableObject {
         KeySlot(index: 9, keyCode: 29, displayKey: "0")
     ]
 
-    /// Keys shown in a new preset (1-5); "+ Key" adds up to all of `keySlots`.
+    /// Keys shown in a new preset (1-5); the + button adds up to all of `keySlots`.
     static let defaultKeyCount = 5
     static let minimumKeyCount = 1
 
@@ -129,7 +129,7 @@ final class HotkeyBarStore: ObservableObject {
         scheduleSave()
     }
 
-    /// Hides the last key. Its title and sound are kept, so "+ Key" brings it back as it was.
+    /// Hides the last key. Its title and sound are kept, so the + button brings it back as it was.
     func removeLastKey() {
         guard canRemoveKey, let selectedIndex else { return }
         presets[selectedIndex].keyCount = keyCount - 1

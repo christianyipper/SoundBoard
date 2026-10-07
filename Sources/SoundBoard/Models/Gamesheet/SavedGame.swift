@@ -1,16 +1,33 @@
 import Foundation
 
-/// The gamesheet information a Game Log save keeps: team names and rosters, shots, and the
-/// recorded goals (with assists) and penalties. The current period and clock time aren't saved.
+/// The gamesheet information a saved game keeps: team names and rosters, shots, goalkeepers,
+/// officials, and the recorded goals (with assists) and penalties. The current period and clock time aren't
+/// saved.
 struct GameRecord: Codable, Equatable {
     var teamNames: [TeamSide: String]
     var teamRosters: [TeamSide: RosterTeam]
     var shots: [TeamSide: [GamePeriod: Int]]
+    var goalkeepers: [TeamSide: GoalkeeperEntry]
+    var officials: Officials
     var goals: [GoalEntry]
     var penalties: [PenaltyEntry]
 }
 
-/// One named save in the Gamesheet's Game Log.
+// Saves from before goalkeepers or officials were tracked have no `goalkeepers`/`officials` key.
+extension GameRecord {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        teamNames = try container.decode([TeamSide: String].self, forKey: .teamNames)
+        teamRosters = try container.decode([TeamSide: RosterTeam].self, forKey: .teamRosters)
+        shots = try container.decode([TeamSide: [GamePeriod: Int]].self, forKey: .shots)
+        goalkeepers = try container.decodeIfPresent([TeamSide: GoalkeeperEntry].self, forKey: .goalkeepers) ?? [:]
+        officials = try container.decodeIfPresent(Officials.self, forKey: .officials) ?? Officials()
+        goals = try container.decode([GoalEntry].self, forKey: .goals)
+        penalties = try container.decode([PenaltyEntry].self, forKey: .penalties)
+    }
+}
+
+/// One saved game, listed as a playlist in the sidebar.
 struct SavedGame: Identifiable, Codable, Equatable {
     let id: UUID
     var name: String
@@ -59,11 +76,23 @@ struct SavedGame: Identifiable, Codable, Equatable {
 
 extension GameStore.Game {
     var record: GameRecord {
-        get { GameRecord(teamNames: teamNames, teamRosters: teamRosters, shots: shots, goals: goals, penalties: penalties) }
+        get {
+            GameRecord(
+                teamNames: teamNames,
+                teamRosters: teamRosters,
+                shots: shots,
+                goalkeepers: goalkeepers,
+                officials: officials,
+                goals: goals,
+                penalties: penalties
+            )
+        }
         set {
             teamNames = newValue.teamNames
             teamRosters = newValue.teamRosters
             shots = newValue.shots
+            goalkeepers = newValue.goalkeepers
+            officials = newValue.officials
             goals = newValue.goals
             penalties = newValue.penalties
         }

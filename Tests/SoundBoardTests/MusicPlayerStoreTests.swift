@@ -15,7 +15,7 @@ final class MusicPlayerStoreTests: XCTestCase {
     }
 
     private func makePlaylist(soundCount: Int, seconds: Double = 0.2, in store: PlaylistStore) throws -> Playlist {
-        let playlist = store.addPlaylist(name: "Music")
+        let playlist = store.library
         var urls: [URL] = []
         for index in 0..<soundCount {
             let url = tempDirectory.appendingPathComponent("\(index).wav")
@@ -23,7 +23,7 @@ final class MusicPlayerStoreTests: XCTestCase {
             urls.append(url)
         }
         try store.importSounds(from: urls, into: playlist.id)
-        return store.playlists.first { $0.id == playlist.id }!
+        return store.library
     }
 
     func testTogglePlayPauseStartsFirstQueuedTrack() throws {
@@ -32,7 +32,7 @@ final class MusicPlayerStoreTests: XCTestCase {
         let audioManager = AudioPlayerManager()
         let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager)
 
-        musicPlayer.selectedPlaylistID = playlist.id
+        musicPlayer.selectedFolderID = playlist.tabs[0].id
         let cuedSoundID = try XCTUnwrap(musicPlayer.currentSoundID)
         musicPlayer.togglePlayPause()
 
@@ -46,7 +46,7 @@ final class MusicPlayerStoreTests: XCTestCase {
         let audioManager = AudioPlayerManager()
         let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager)
 
-        musicPlayer.selectedPlaylistID = playlist.id
+        musicPlayer.selectedFolderID = playlist.tabs[0].id
         let firstSoundID = try XCTUnwrap(musicPlayer.currentSoundID)
         musicPlayer.togglePlayPause() // play
         musicPlayer.togglePlayPause() // pause -> should cue next track
@@ -67,7 +67,7 @@ final class MusicPlayerStoreTests: XCTestCase {
         let audioManager = AudioPlayerManager()
         let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager)
 
-        musicPlayer.selectedPlaylistID = playlist.id
+        musicPlayer.selectedFolderID = playlist.tabs[0].id
         let firstSoundID = try XCTUnwrap(musicPlayer.currentSoundID)
 
         musicPlayer.togglePlayPause() // play track 1
@@ -78,37 +78,50 @@ final class MusicPlayerStoreTests: XCTestCase {
         XCTAssertEqual(musicPlayer.currentSoundID, firstSoundID)
     }
 
-    func testShuffleOrderPersistsAcrossPlaylistSwitches() throws {
+    func testShuffleOrderPersistsAcrossFolderSwitches() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
         let playlistA = try makePlaylist(soundCount: 5, in: store)
-        let playlistB = store.addPlaylist(name: "Other")
+        let otherFolder = try XCTUnwrap(store.addTab(name: "Other", toPlaylist: playlistA.id))
         let audioManager = AudioPlayerManager()
         let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager)
 
-        musicPlayer.selectedPlaylistID = playlistA.id
+        musicPlayer.selectedFolderID = playlistA.tabs[0].id
         let firstCuedID = musicPlayer.currentSoundID
 
-        musicPlayer.selectedPlaylistID = playlistB.id
-        musicPlayer.selectedPlaylistID = playlistA.id
+        musicPlayer.selectedFolderID = otherFolder.id
+        musicPlayer.selectedFolderID = playlistA.tabs[0].id
 
         XCTAssertEqual(musicPlayer.currentSoundID, firstCuedID, "switching away and back should not reshuffle")
     }
 
-    func testResetShuffleReshufflesAndStopsPlayback() throws {
+    func testResetShuffleIsIgnoredWhilePlaying() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
         let playlist = try makePlaylist(soundCount: 3, in: store)
         let audioManager = AudioPlayerManager()
         let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager)
 
-        musicPlayer.selectedPlaylistID = playlist.id
+        musicPlayer.selectedFolderID = playlist.tabs[0].id
         let playingSoundID = try XCTUnwrap(musicPlayer.currentSoundID)
         musicPlayer.togglePlayPause()
         XCTAssertTrue(musicPlayer.isPlaying)
 
         musicPlayer.resetShuffle()
 
+        XCTAssertTrue(musicPlayer.isPlaying)
+        XCTAssertEqual(musicPlayer.currentSoundID, playingSoundID)
+        XCTAssertEqual(audioManager.state(for: playingSoundID), .playing)
+    }
+
+    func testResetShuffleCuesTrackWhilePaused() throws {
+        let store = PlaylistStore(baseDirectory: tempDirectory)
+        let playlist = try makePlaylist(soundCount: 3, in: store)
+        let audioManager = AudioPlayerManager()
+        let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager)
+
+        musicPlayer.selectedFolderID = playlist.tabs[0].id
+        musicPlayer.resetShuffle()
+
         XCTAssertFalse(musicPlayer.isPlaying)
-        XCTAssertEqual(audioManager.state(for: playingSoundID), .played)
         XCTAssertNotNil(musicPlayer.currentSoundID)
     }
 
@@ -119,7 +132,7 @@ final class MusicPlayerStoreTests: XCTestCase {
         audioManager.crossFadeDuration = 0.3
         let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager)
 
-        musicPlayer.selectedPlaylistID = playlist.id
+        musicPlayer.selectedFolderID = playlist.tabs[0].id
         let firstSoundID = try XCTUnwrap(musicPlayer.currentSoundID)
         musicPlayer.togglePlayPause() // starts the ~1s-long first track
 
@@ -134,21 +147,43 @@ final class MusicPlayerStoreTests: XCTestCase {
         XCTAssertEqual(audioManager.state(for: firstSoundID), .played)
     }
 
-    func testSwitchingPlaylistStopsCurrentPlayback() throws {
+    func testSwitchingFolderStopsCurrentPlayback() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
         let playlistA = try makePlaylist(soundCount: 2, in: store)
-        let playlistB = try makePlaylist(soundCount: 2, in: store)
+        let otherFolder = try XCTUnwrap(store.addTab(name: "Other", toPlaylist: playlistA.id))
         let audioManager = AudioPlayerManager()
         let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager)
 
-        musicPlayer.selectedPlaylistID = playlistA.id
+        musicPlayer.selectedFolderID = playlistA.tabs[0].id
         let playingSoundID = try XCTUnwrap(musicPlayer.currentSoundID)
         musicPlayer.togglePlayPause()
         XCTAssertTrue(musicPlayer.isPlaying)
 
-        musicPlayer.selectedPlaylistID = playlistB.id
+        musicPlayer.selectedFolderID = otherFolder.id
 
         XCTAssertFalse(musicPlayer.isPlaying)
         XCTAssertEqual(audioManager.state(for: playingSoundID), .played)
+    }
+
+    func testSelectedFolderOnlyQueuesItsOwnSounds() throws {
+        let store = PlaylistStore(baseDirectory: tempDirectory)
+        let playlist = try makePlaylist(soundCount: 2, in: store)
+        let folderURL = tempDirectory.appendingPathComponent("Warmup", isDirectory: true)
+        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        for index in 0..<3 {
+            try TestAudioFixture.makeSilentWAVData().write(to: folderURL.appendingPathComponent("w\(index).wav"))
+        }
+        let folderSoundIDs = Set(try store.importFolder(folderURL, into: playlist.id).map(\.id))
+        let folderID = try XCTUnwrap(store.playlists.first { $0.id == playlist.id }?.tabs.last?.id)
+        let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: AudioPlayerManager())
+
+        musicPlayer.selectedFolderID = folderID
+        var cuedIDs: Set<UUID> = []
+        for _ in 0..<3 {
+            cuedIDs.insert(try XCTUnwrap(musicPlayer.currentSoundID))
+            musicPlayer.skipToNext()
+        }
+
+        XCTAssertEqual(cuedIDs, folderSoundIDs)
     }
 }

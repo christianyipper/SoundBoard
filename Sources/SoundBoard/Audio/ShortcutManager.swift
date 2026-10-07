@@ -2,8 +2,8 @@ import AppKit
 import Combine
 
 /// Installs local key-down and key-up monitors for the app's lifetime. On key-down it checks the
-/// spacebar (music player play/pause) first, then the fixed "V" mic hotkey, then the
-/// selected hotkey preset's slots (plain keys 1-9/0), then every sound's custom assigned shortcut,
+/// spacebar (music player play/pause) first, then the fixed "V" mic hotkey, then the fixed
+/// gamesheet shot keys (Q/A home +/-, E/D away +/-), then the selected hotkey preset's slots (plain keys 1-9/0), then every sound's custom assigned shortcut,
 /// toggling play/pause on a match. The mic hotkey's behavior depends on
 /// `settings.microphoneHotkeyMode`: "toggle" flips it on key-down; "push to talk" turns it on
 /// while V is held and off on key-up (handled by the key-up monitor). While `beginRecording` is
@@ -13,6 +13,17 @@ import Combine
 final class ShortcutManager: ObservableObject {
     private static let spacebarKeyCode: UInt16 = 49
     private static let microphoneKeyCode: UInt16 = 9
+    /// Physical Q/A/E/D keys: add/remove a shot for home/away in the current period.
+    static let shotKeys: [(keyCode: UInt16, displayKey: String, side: TeamSide, delta: Int)] = [
+        (12, "Q", .home, 1),
+        (0, "A", .home, -1),
+        (14, "E", .away, 1),
+        (2, "D", .away, -1),
+    ]
+
+    static func shotKey(for side: TeamSide, delta: Int) -> String? {
+        shotKeys.first { $0.side == side && $0.delta == delta }?.displayKey
+    }
 
     private let playlistStore: PlaylistStore
     private let audioPlayerManager: AudioPlayerManager
@@ -20,6 +31,7 @@ final class ShortcutManager: ObservableObject {
     private let microphoneManager: MicrophoneManager
     private let musicPlayerStore: MusicPlayerStore
     private let settingsStore: SettingsStore
+    private let gameStore: GameStore
     private var keyDownMonitor: Any?
     private var keyUpMonitor: Any?
     private var recordingCompletion: ((SoundShortcut) -> Void)?
@@ -30,7 +42,8 @@ final class ShortcutManager: ObservableObject {
         hotkeyBarStore: HotkeyBarStore,
         microphoneManager: MicrophoneManager,
         musicPlayerStore: MusicPlayerStore,
-        settingsStore: SettingsStore
+        settingsStore: SettingsStore,
+        gameStore: GameStore
     ) {
         self.playlistStore = playlistStore
         self.audioPlayerManager = audioPlayerManager
@@ -38,6 +51,7 @@ final class ShortcutManager: ObservableObject {
         self.microphoneManager = microphoneManager
         self.musicPlayerStore = musicPlayerStore
         self.settingsStore = settingsStore
+        self.gameStore = gameStore
     }
 
     func start() {
@@ -90,6 +104,10 @@ final class ShortcutManager: ObservableObject {
         }
         if hasNoModifiers, event.keyCode == Self.microphoneKeyCode {
             handleMicrophoneKeyDown()
+            return nil
+        }
+        if hasNoModifiers, let shotKey = Self.shotKeys.first(where: { $0.keyCode == event.keyCode }) {
+            gameStore.addShot(for: shotKey.side, delta: shotKey.delta)
             return nil
         }
         if hasNoModifiers, let slot = hotkeyBarStore.slot(forKeyCode: event.keyCode) {

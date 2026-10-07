@@ -120,11 +120,13 @@ enum Infraction: String, CaseIterable, Identifiable, Codable {
     case hooking
     case instigator
     case interference
+    case kneeing
     case roughing
     case slashing
     case slewFoot
     case tooManyMen
     case tripping
+    case unsportsmanlike
 
     var id: String { rawValue }
 
@@ -143,11 +145,13 @@ enum Infraction: String, CaseIterable, Identifiable, Codable {
         case .hooking: "Hooking"
         case .instigator: "Instigator"
         case .interference: "Interference"
+        case .kneeing: "Kneeing"
         case .roughing: "Roughing"
         case .slashing: "Slashing"
         case .slewFoot: "Slew Foot"
         case .tooManyMen: "Too Many Men"
         case .tripping: "Tripping"
+        case .unsportsmanlike: "Unsportsmanlike"
         }
     }
 
@@ -155,6 +159,8 @@ enum Infraction: String, CaseIterable, Identifiable, Codable {
     var fullName: String {
         switch self {
         case .cfb: "Checking From Behind"
+        case .headContact: "Illegal Check to the Head"
+        case .unsportsmanlike: "Unsportsmanlike Conduct"
         default: label
         }
     }
@@ -218,6 +224,42 @@ struct PenaltyDraftRow: Equatable {
     static let rowsPerSide = 3
 
     var isComplete: Bool { infraction != nil && !types.isEmpty && !playerNumber.isEmpty }
+}
+
+/// A side's goalkeepers, typed under its shots: the starting goalie's number, the substitute's
+/// number, and the clock time the sub went in.
+struct GoalkeeperEntry: Codable, Equatable {
+    var goalie = ""
+    var sub = ""
+    /// Up to four digits, like `GameStore.Game.periodTimeDigits`.
+    var subTimeDigits = ""
+}
+
+/// The game's on-ice officials, typed into the Gamesheet's Officials card: two referees and two
+/// linespeople.
+struct Officials: Codable, Equatable {
+    enum Role: CaseIterable {
+        case referee, linesperson
+
+        var label: String {
+            switch self {
+            case .referee: "Referee"
+            case .linesperson: "Lines"
+            }
+        }
+    }
+
+    static let perRole = 2
+
+    var referees = Array(repeating: "", count: Officials.perRole)
+    var linespeople = Array(repeating: "", count: Officials.perRole)
+
+    subscript(role: Role) -> [String] {
+        get { role == .referee ? referees : linespeople }
+        set {
+            if role == .referee { referees = newValue } else { linespeople = newValue }
+        }
+    }
 }
 
 /// Identifies one penalty row: which side's column and which of its rows.

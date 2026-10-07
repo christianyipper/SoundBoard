@@ -305,9 +305,10 @@ final class GameStoreTests: XCTestCase {
         let firstID = try! XCTUnwrap(store.activeSaveID)
 
         store.newGame()
-        XCTAssertNil(store.activeSaveID)
-        XCTAssertEqual(store.savedGames.count, 1, "a blank new game isn't saved yet")
-        XCTAssertEqual(store.savedGames[0].record.teamNames[.home], "Wolves", "starting over leaves the save alone")
+        let secondID = try! XCTUnwrap(store.activeSaveID)
+        XCTAssertNotEqual(secondID, firstID)
+        XCTAssertEqual(store.savedGames.map(\.id), [secondID, firstID], "a new game is listed right away, newest first")
+        XCTAssertEqual(store.savedGames[1].record.teamNames[.home], "Wolves", "starting over leaves the save alone")
         store.setTeamName("Bears", for: .home)
         XCTAssertEqual(store.savedGames.count, 2)
 
@@ -338,6 +339,32 @@ final class GameStoreTests: XCTestCase {
         XCTAssertEqual(store.shotTotal(for: .home), 0, "deleting the active save clears the sheet")
     }
 
+    func testDeletingTheActiveSaveOpensTheNewestRemainingOne() {
+        let store = GameStore(baseDirectory: tempDirectory)
+        store.setTeamName("Wolves", for: .home)
+        let firstID = try! XCTUnwrap(store.activeSaveID)
+        store.newGame()
+        store.setTeamName("Bears", for: .home)
+
+        store.deleteSave(try! XCTUnwrap(store.activeSaveID))
+
+        XCTAssertEqual(store.activeSaveID, firstID)
+        XCTAssertEqual(store.teamName(for: .home), "Wolves")
+    }
+
+    func testOfficialsAreSavedWithTheGame() {
+        let store = GameStore(baseDirectory: tempDirectory)
+        store.setOfficialName("Pat Doe", role: .referee, index: 1)
+        store.setOfficialName("Kim Fox", role: .linesperson, index: 0)
+        let id = try! XCTUnwrap(store.activeSaveID)
+
+        store.newGame()
+        XCTAssertEqual(store.game.officials, Officials())
+        store.loadSave(id)
+        XCTAssertEqual(store.officialName(.referee, index: 1), "Pat Doe")
+        XCTAssertEqual(store.officialName(.linesperson, index: 0), "Kim Fox")
+    }
+
     func testSavesPersist() {
         let store = GameStore(baseDirectory: tempDirectory)
         store.setTeamName("Wolves", for: .home)
@@ -353,6 +380,46 @@ final class GameStoreTests: XCTestCase {
         XCTAssertNil(GamesheetField.goal(.home, .assist2).next)
         XCTAssertEqual(GamesheetField.penaltyNumber(.away, 2).next, .servedBy(.away, 2))
         XCTAssertNil(GamesheetField.time.next)
+        XCTAssertEqual(GamesheetField.goalie(.home).next, .goalieSub(.home))
+        XCTAssertEqual(GamesheetField.goalieSub(.home).next, .goalieSubTime(.home))
+        XCTAssertNil(GamesheetField.goalieSubTime(.home).next)
+    }
+
+    func testGoalkeepersAreSavedWithTheGame() throws {
+        let store = GameStore(baseDirectory: tempDirectory)
+        store.updateGoalkeepers(for: .home) { $0.goalie = JerseyNumber.sanitized("31") }
+        store.updateGoalkeepers(for: .home) { $0.sub = "1" }
+        store.setGoalieSubTimeText("8:30", for: .home)
+        XCTAssertEqual(store.goalieSubTimeText(for: .home), "8:30")
+        XCTAssertEqual(store.goalkeepers(for: .away), GoalkeeperEntry())
+
+        let saveID = try XCTUnwrap(store.activeSaveID, "entering a goalie starts a save")
+        store.flush()
+        let reloaded = GameStore(baseDirectory: tempDirectory)
+        XCTAssertEqual(reloaded.goalkeepers(for: .home), GoalkeeperEntry(goalie: "31", sub: "1", subTimeDigits: "830"))
+
+        reloaded.newGame()
+        XCTAssertEqual(reloaded.goalkeepers(for: .home), GoalkeeperEntry())
+        reloaded.loadSave(saveID)
+        XCTAssertEqual(reloaded.goalkeepers(for: .home).goalie, "31")
+    }
+
+    func testGamesSavedBeforeGoalkeepersStillLoad() throws {
+        var game = GameStore.Game()
+        game.teamNames[.home] = "Wolves"
+        let oldGame = try withoutGoalkeepers(JSONEncoder().encode(game))
+        let decoded = try JSONDecoder().decode(GameStore.Game.self, from: oldGame)
+        XCTAssertEqual(decoded.teamNames[.home], "Wolves")
+        XCTAssertTrue(decoded.goalkeepers.isEmpty)
+
+        let oldRecord = try withoutGoalkeepers(JSONEncoder().encode(game.record))
+        XCTAssertTrue(try JSONDecoder().decode(GameRecord.self, from: oldRecord).goalkeepers.isEmpty)
+    }
+
+    private func withoutGoalkeepers(_ data: Data) throws -> Data {
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertNotNil(object.removeValue(forKey: "goalkeepers"))
+        return try JSONSerialization.data(withJSONObject: object)
     }
 
     @MainActor
