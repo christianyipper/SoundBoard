@@ -105,48 +105,57 @@ extension Set where Element == PenaltyType {
     }
 }
 
+/// Listed alphabetically, which is the order the gamesheet's infraction picker shows them in.
 enum Infraction: String, CaseIterable, Identifiable, Codable {
-    case tripping
-    case hooking
-    case slashing
-    case interference
-    case highSticking
-    case roughing
-    case holding
-    case crossChecking
+    case aggressor
     case boarding
+    case cfb
     case charging
-    case tooManyMen
+    case crossChecking
     case delayOfGame
     case fighting
     case headContact
-    case cfb
-    case slewFoot
+    case highSticking
+    case holding
+    case hooking
     case instigator
-    case aggressor
+    case interference
+    case roughing
+    case slashing
+    case slewFoot
+    case tooManyMen
+    case tripping
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .tripping: "Tripping"
-        case .hooking: "Hooking"
-        case .slashing: "Slashing"
-        case .interference: "Interference"
-        case .highSticking: "High-Sticking"
-        case .roughing: "Roughing"
-        case .holding: "Holding"
-        case .crossChecking: "Cross-Checking"
+        case .aggressor: "Aggressor"
         case .boarding: "Boarding"
+        case .cfb: "CFB"
         case .charging: "Charging"
-        case .tooManyMen: "Too Many Men"
+        case .crossChecking: "Cross-Checking"
         case .delayOfGame: "Delay of Game"
         case .fighting: "Fighting"
         case .headContact: "Head Contact"
-        case .cfb: "CFB"
-        case .slewFoot: "Slew Foot"
+        case .highSticking: "High-Sticking"
+        case .holding: "Holding"
+        case .hooking: "Hooking"
         case .instigator: "Instigator"
-        case .aggressor: "Aggressor"
+        case .interference: "Interference"
+        case .roughing: "Roughing"
+        case .slashing: "Slashing"
+        case .slewFoot: "Slew Foot"
+        case .tooManyMen: "Too Many Men"
+        case .tripping: "Tripping"
+        }
+    }
+
+    /// The spelled-out name used in the Call view, e.g. "Checking From Behind" for CFB.
+    var fullName: String {
+        switch self {
+        case .cfb: "Checking From Behind"
+        default: label
         }
     }
 }

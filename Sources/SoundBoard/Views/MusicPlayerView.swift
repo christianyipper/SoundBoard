@@ -37,8 +37,7 @@ struct MusicPlayerView: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 16)
-        .padding(.top, 24)
-        .padding(.bottom, 12)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
         .background(DesignSystem.Colors.surfaceTint.opacity(0.35))
     }
@@ -201,10 +200,10 @@ private struct TimelineView: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(Self.format(elapsed))
-                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                 .monospacedDigit()
-                .frame(width: 32, alignment: .trailing)
+                .frame(width: 40, alignment: .trailing)
 
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
@@ -218,10 +217,10 @@ private struct TimelineView: View {
             .frame(height: 4)
 
             Text(duration.map(Self.format) ?? "--:--")
-                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                 .monospacedDigit()
-                .frame(width: 32, alignment: .leading)
+                .frame(width: 40, alignment: .leading)
         }
     }
 

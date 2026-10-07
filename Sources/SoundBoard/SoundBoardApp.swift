@@ -86,6 +86,7 @@ struct SoundBoardApp: App {
         Settings {
             SettingsView()
                 .environmentObject(settingsStore)
+                .environmentObject(rosterStore)
                 .preferredColorScheme(settingsStore.settings.appearance.colorScheme)
                 .tint(DesignSystem.Colors.accentPrimary)
         }

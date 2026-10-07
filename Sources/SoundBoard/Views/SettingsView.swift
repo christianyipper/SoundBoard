@@ -2,18 +2,28 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
+    @EnvironmentObject private var rosterStore: RosterStore
 
     @State private var availableInputDevices: [AudioInputDevice] = []
 
     var body: some View {
         Form {
-            Section("Appearance") {
-                Picker("Theme", selection: $settingsStore.settings.appearance) {
-                    ForEach(AppAppearance.allCases) { appearance in
-                        Text(appearance.label).tag(appearance)
+            Section("Rosters") {
+                LabeledContent("Scraper last updated") {
+                    if let league = rosterStore.league {
+                        Text(league.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                    } else {
+                        Text(rosterStore.isRefreshing ? "Downloading…" : "No rosters downloaded")
                     }
                 }
-                .pickerStyle(.segmented)
+            }
+
+            Section("Appearance") {
+                LabeledContent("Theme") {
+                    SegmentedTabs(selection: $settingsStore.settings.appearance, options: AppAppearance.allCases) { appearance in
+                        Text(appearance.label)
+                    }
+                }
             }
 
             Section {
@@ -25,6 +35,11 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Volume: \(Int(settingsStore.settings.volume * 100))%")
                     Slider(value: $settingsStore.settings.volume, in: 0...1)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Mic Volume: \(Int(settingsStore.settings.microphoneVolume * 100))%")
+                    Slider(value: $settingsStore.settings.microphoneVolume, in: 0...1)
                 }
 
                 Toggle("Match loudness across sounds", isOn: $settingsStore.settings.normalizeLoudness)
@@ -70,12 +85,11 @@ struct SettingsView: View {
                     .pointerCursor()
                 }
 
-                Picker("Hotkey Mode", selection: $settingsStore.settings.microphoneHotkeyMode) {
-                    ForEach(MicrophoneHotkeyMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
+                LabeledContent("Hotkey Mode") {
+                    SegmentedTabs(selection: $settingsStore.settings.microphoneHotkeyMode, options: MicrophoneHotkeyMode.allCases) { mode in
+                        Text(mode.label)
                     }
                 }
-                .pickerStyle(.segmented)
 
                 Text(settingsStore.settings.microphoneHotkeyMode == .pushToTalk
                     ? "Hold V to talk; release to stop."

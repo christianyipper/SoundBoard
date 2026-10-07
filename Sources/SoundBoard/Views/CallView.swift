@@ -77,13 +77,9 @@ struct CallView: View {
     private var header: some View {
         HStack(spacing: 12) {
             teamName(.home)
-            Picker("View", selection: $mode) {
-                ForEach(CallViewMode.allCases) { mode in
-                    Text(mode.label).tag(mode)
-                }
+            SegmentedTabs(selection: $mode, options: CallViewMode.allCases) { mode in
+                Text(mode.label)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .frame(width: 240)

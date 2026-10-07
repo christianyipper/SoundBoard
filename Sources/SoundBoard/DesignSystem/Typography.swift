@@ -8,8 +8,8 @@ extension DesignSystem {
         static let headline = Font.system(size: 18, weight: .semibold, design: .rounded)
         static let body = Font.system(size: 18, weight: .regular, design: .rounded)
         static let callout = Font.system(.callout, design: .rounded, weight: .regular)
-        static let caption = Font.system(.caption, design: .rounded, weight: .medium)
-        static let captionBold = Font.system(.caption2, design: .rounded, weight: .bold)
+        static let caption = Font.system(size: 12, weight: .medium, design: .rounded)
+        static let captionBold = Font.system(size: 12, weight: .bold, design: .rounded)
         /// Larger bold badge type, e.g. the single key-letter/number badges on hotkey slots.
         static let keyBadge = Font.system(size: 16, weight: .bold, design: .rounded)
     }

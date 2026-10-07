@@ -11,8 +11,8 @@ enum MainMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .files: "Files"
-        case .gamesheet: "Gamesheet"
-        case .call: "Call"
+        case .gamesheet: "Live View"
+        case .call: "Gamesheet"
         }
     }
 
@@ -85,13 +85,9 @@ private struct HotkeyTopBar: View {
             Spacer(minLength: 12)
 
             HStack(spacing: 16) {
-                Picker("View", selection: $mode) {
-                    ForEach(MainMode.allCases) { mode in
-                        Label(mode.title, systemImage: mode.icon).tag(mode)
-                    }
+                SegmentedTabs(selection: $mode, options: MainMode.allCases) { mode in
+                    Label(mode.title, systemImage: mode.icon)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
                 .fixedSize()
                 .help("Files and Gamesheet switch hotkeys to Default; Call switches them to Goal Call")
 
@@ -107,11 +103,12 @@ private struct HotkeyTopBar: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 8)
         .padding(.top, 6)
-        .background(DesignSystem.Colors.surfaceTint.opacity(0.35))
+        .background(DesignSystem.Colors.headerBackground)
+        .environment(\.onDarkHeader, true)
     }
 }
 
-/// "- Key" / "+ Key" button beside the view toggle.
+/// "- Key" / "+ Key" button beside the view toggle; only used in the dark purple header.
 private struct KeyCountButton: View {
     let title: String
     let isEnabled: Bool
@@ -128,14 +125,14 @@ private struct KeyCountButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(DesignSystem.Colors.textPrimary)
+        .foregroundStyle(DesignSystem.Colors.headerText)
         .background(
             RoundedRectangle(cornerRadius: DesignSystem.Radius.small)
-                .fill(isHovering && isEnabled ? DesignSystem.Colors.surfaceTint.opacity(0.8) : DesignSystem.Colors.surfaceTint.opacity(0.3))
+                .fill(Color.white.opacity(isHovering && isEnabled ? 0.14 : 0.06))
         )
         .overlay(
             RoundedRectangle(cornerRadius: DesignSystem.Radius.small)
-                .strokeBorder(DesignSystem.Colors.border, lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
         )
         .opacity(isEnabled ? 1 : 0.4)
         .disabled(!isEnabled)

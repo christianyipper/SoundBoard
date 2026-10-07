@@ -14,8 +14,8 @@ final class MicrophoneManager: ObservableObject {
     private var selectedDeviceUID: String?
     private var cancellables = Set<AnyCancellable>()
 
-    /// Keeps the selected input device in sync with the persisted settings, hot-swapping the
-    /// device on the fly if the mic is currently live.
+    /// Keeps the selected input device and mic volume in sync with the persisted settings,
+    /// hot-swapping the device on the fly if the mic is currently live.
     func bind(to settingsStore: SettingsStore) {
         settingsStore.$settings
             .map(\.microphoneDeviceID)
@@ -27,6 +27,14 @@ final class MicrophoneManager: ObservableObject {
                     stop()
                     start()
                 }
+            }
+            .store(in: &cancellables)
+
+        settingsStore.$settings
+            .map(\.microphoneVolume)
+            .removeDuplicates()
+            .sink { [weak self] volume in
+                self?.engine.mainMixerNode.outputVolume = volume
             }
             .store(in: &cancellables)
     }

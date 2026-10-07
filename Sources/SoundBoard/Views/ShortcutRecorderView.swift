@@ -28,7 +28,7 @@ struct ShortcutRecorderView: View {
 
             if let conflict {
                 Text("“\(conflict.sound.name)” in “\(conflict.playlist.name)” already uses this shortcut.")
-                    .font(.caption)
+                    .font(.system(size: 12))
                     .foregroundStyle(.orange)
                     .multilineTextAlignment(.center)
             }
@@ -44,6 +44,7 @@ struct ShortcutRecorderView: View {
                         save()
                     }
                     .buttonStyle(.borderedProminent)
+                    .foregroundStyle(DesignSystem.Colors.onAccent)
                     .pointerCursor()
                 }
             }

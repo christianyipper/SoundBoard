@@ -8,10 +8,10 @@ final class CallTextTests: XCTestCase {
 
     func testSheetGoalListsScorerAndAssists() {
         let goal = GoalEntry(team: .home, period: .first, time: "12:45", strength: .powerPlay, scorer: "12", assist1: "5", assist2: "7")
-        XCTAssertEqual(CallText.sheetGoal(goal), "12:45 - G:12, A:5, A:7")
+        XCTAssertEqual(CallText.sheetGoal(goal), "12:45 - #12, #5, #7")
 
         let unassisted = GoalEntry(team: .home, period: .first, time: "03:00", strength: .even, scorer: "9")
-        XCTAssertEqual(CallText.sheetGoal(unassisted), "03:00 - G:9")
+        XCTAssertEqual(CallText.sheetGoal(unassisted), "03:00 - #9")
     }
 
     func testSheetPenaltyJoinsTypes() {
@@ -92,5 +92,17 @@ final class CallTextTests: XCTestCase {
         XCTAssertEqual(CallText.ordinal(20), "twentieth")
         XCTAssertEqual(CallText.ordinal(22), "twenty-second")
         XCTAssertEqual(CallText.ordinal(101), "101st")
+    }
+
+    func testCheckingFromBehindIsSpelledOutInCallView() {
+        let penalty = PenaltyEntry(team: .home, period: .first, time: "05:00", infraction: .cfb, types: [.minor], playerNumber: "9")
+        XCTAssertTrue(CallText.sheetPenalty(penalty).hasSuffix("Checking From Behind"))
+        XCTAssertTrue(CallText.callPenalty(penalty, teamName: "Wolves", name: { _ in nil }).contains("for Checking From Behind."))
+        XCTAssertEqual(Infraction.cfb.label, "CFB", "the gamesheet keeps the short label")
+    }
+
+    func testInfractionsAreAlphabetical() {
+        let labels = Infraction.allCases.map(\.label)
+        XCTAssertEqual(labels, labels.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending })
     }
 }

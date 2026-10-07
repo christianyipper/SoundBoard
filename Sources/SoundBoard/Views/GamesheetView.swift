@@ -65,7 +65,9 @@ struct GamesheetView: View {
                 .animation(.easeInOut(duration: 0.25), value: gameStore.activePenaltyRow?.side)
                 .animation(.easeInOut(duration: 0.25), value: rosterSides)
             }
-            .padding(16)
+            // Top matches the 12pt section gap so the space under the music player reads the same.
+            .padding([.horizontal, .bottom], 16)
+            .padding(.top, 12)
             // Clicking empty space ends editing so hotkeys work again.
             .background(
                 Color.clear
@@ -165,7 +167,7 @@ extension TeamSide {
 
     var accent: Color {
         switch self {
-        case .home: DesignSystem.Colors.accentPrimary
+        case .home: DesignSystem.Colors.homeTeam
         case .away: DesignSystem.Colors.accentSecondary
         }
     }
@@ -292,7 +294,7 @@ private struct PlayerCaption: View {
 
 private struct HotkeysPausedPill: View {
     var body: some View {
-        Label("Hotkeys paused while typing — press Esc, click away or click the field again to resume", systemImage: "keyboard.badge.ellipsis")
+        Label("Hotkeys paused while typing", systemImage: "keyboard.badge.ellipsis")
             .font(DesignSystem.Typography.caption)
             .foregroundStyle(DesignSystem.Colors.textPrimary)
             .padding(.horizontal, 14)
@@ -546,7 +548,7 @@ private struct TeamPanel: View {
                 Text("\(gameStore.shotCount(for: side, period: gameStore.currentPeriod))")
                     .font(DesignSystem.Typography.title.monospacedDigit())
                 Text("Shots · Total \(gameStore.shotTotal(for: side))")
-                    .font(.system(size: 18, weight: .medium, design: .rounded))
+                    .font(DesignSystem.Typography.caption)
                     .foregroundStyle(DesignSystem.Colors.textSecondary)
                     .lineLimit(1)
                     .fixedSize()
@@ -639,16 +641,12 @@ private struct PeriodPanel: View {
         VStack(spacing: 12) {
             VStack(spacing: 8) {
                 SectionLabel(title: "Period")
-                Picker("Period", selection: Binding(
+                SegmentedTabs(selection: Binding(
                     get: { gameStore.currentPeriod },
                     set: { gameStore.currentPeriod = $0 }
-                )) {
-                    ForEach(GamePeriod.allCases) { period in
-                        Text(period.label).tag(period)
-                    }
+                ), options: GamePeriod.allCases) { period in
+                    Text(period.label)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
             }
             .frame(height: GamesheetLayout.shotsRowHeight)
             .gamesheetCard()

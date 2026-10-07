@@ -396,7 +396,7 @@ private struct ExplorerPathBar: View {
             Button(action: onNavigateHome) {
                 HStack(spacing: 4) {
                     Image(systemName: "house.fill")
-                        .font(.system(size: 10))
+                        .font(.system(size: 12))
                     Text(playlistName)
                 }
             }

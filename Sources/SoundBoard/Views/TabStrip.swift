@@ -17,8 +17,18 @@ struct TabStripButton<ExtraMenuItems: View>: View {
     let onMove: (_ draggedID: UUID, _ targetID: UUID) -> Void
     @ViewBuilder var extraMenuItems: () -> ExtraMenuItems
 
+    @Environment(\.onDarkHeader) private var onDarkHeader
     @State private var isHovering = false
     @State private var isDropTargeted = false
+
+    private var inactiveFill: Color {
+        if onDarkHeader { return Color.white.opacity(isHovering ? 0.14 : 0.06) }
+        return DesignSystem.Colors.surfaceTint.opacity(isHovering ? 0.7 : 0.3)
+    }
+
+    private var inactiveText: Color {
+        onDarkHeader ? DesignSystem.Colors.headerTextSecondary : DesignSystem.Colors.textSecondary
+    }
 
     var body: some View {
         Button(action: onSelect) {
@@ -49,7 +59,7 @@ struct TabStripButton<ExtraMenuItems: View>: View {
         .buttonStyle(.plain)
         .background(
             UnevenRoundedRectangle(topLeadingRadius: 8, topTrailingRadius: 8)
-                .fill(isActive ? DesignSystem.Colors.background : (isHovering ? DesignSystem.Colors.surfaceTint.opacity(0.7) : DesignSystem.Colors.surfaceTint.opacity(0.3)))
+                .fill(isActive ? DesignSystem.Colors.background : inactiveFill)
         )
         .overlay(alignment: .bottom) {
             if isActive {
@@ -64,7 +74,7 @@ struct TabStripButton<ExtraMenuItems: View>: View {
                     .strokeBorder(DesignSystem.Colors.accentPrimary, lineWidth: 2)
             }
         }
-        .foregroundStyle(isActive ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
+        .foregroundStyle(isActive ? DesignSystem.Colors.textPrimary : inactiveText)
         .onHover { isHovering = $0 }
         .pointerCursor()
         .contextMenu {

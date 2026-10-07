@@ -5,16 +5,16 @@ import Foundation
 enum CallText {
     // MARK: - Sheet
 
-    /// e.g. "12:45 - G:12, A:5, A:7".
+    /// e.g. "12:45 - #12, #5, #7" (scorer, then assists).
     static func sheetGoal(_ goal: GoalEntry) -> String {
-        let numbers = ["G:\(goal.scorer)"] + [goal.assist1, goal.assist2].compactMap { $0 }.map { "A:\($0)" }
+        let numbers = ([goal.scorer] + [goal.assist1, goal.assist2].compactMap { $0 }).map { "#\($0)" }
         return "\(goal.time) - \(numbers.joined(separator: ", "))"
     }
 
     /// e.g. "08:10 - #45, (Major and Game Misconduct) Fighting".
     static func sheetPenalty(_ penalty: PenaltyEntry) -> String {
         let types = penalty.types.map(\.fullName).joined(separator: " and ")
-        return "\(penalty.time) - #\(penalty.playerNumber), (\(types)) \(penalty.infraction.label)"
+        return "\(penalty.time) - #\(penalty.playerNumber), (\(types)) \(penalty.infraction.fullName)"
     }
 
     // MARK: - Call
@@ -55,7 +55,7 @@ enum CallText {
         let length = penalty.types.map(\.callPhrase).joined(separator: " and ")
         let servedBy = penalty.servedBy.map { ", served by number \(player($0, name: name))" } ?? ""
         return [
-            "\(teamName) penalty to number \(player(penalty.playerNumber, name: name)), \(length) for \(penalty.infraction.label)\(servedBy).",
+            "\(teamName) penalty to number \(player(penalty.playerNumber, name: name)), \(length) for \(penalty.infraction.fullName)\(servedBy).",
             "Time of the penalty, \(penalty.time) in \(periodPhrase(penalty.period))."
         ]
         .joined(separator: "\n")

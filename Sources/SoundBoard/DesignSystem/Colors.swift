@@ -45,7 +45,10 @@ extension DesignSystem {
 
         static let surfaceTint = Color.dynamic(light: NSColor(hex: 0xF6D8E4), dark: NSColor(hex: 0x3A2F4E))
         static let accentPrimary = Color.dynamic(light: NSColor(hex: 0xB79CD9), dark: NSColor(hex: 0xC9A8F2))
-        static let accentSecondary = Color.dynamic(light: NSColor(hex: 0x93DFC2), dark: NSColor(hex: 0x7FE8C4))
+        static let accentSecondary = Color.dynamic(light: NSColor(hex: 0xF2CEA0), dark: NSColor(hex: 0xF2C385))
+        // Home team: sky blue (hue 200, saturation 45%), kept separate so
+        // the app-wide lavender accent doesn't change with it.
+        static let homeTeam = Color.dynamic(light: NSColor(hex: 0x77B8D9), dark: NSColor(hex: 0x85CEF2))
         static let successGlow = Color.dynamic(light: NSColor(hex: 0x5FCFA0), dark: NSColor(hex: 0x6BE8B8))
         static let dangerGlow = Color.dynamic(light: NSColor(hex: 0xF0728A), dark: NSColor(hex: 0xFF8FA8))
 
@@ -56,9 +59,28 @@ extension DesignSystem {
 
         static let textPrimary = Color.dynamic(light: NSColor(hex: 0x3A2E44), dark: NSColor(hex: 0xF5ECF7))
         static let textSecondary = Color.dynamic(light: NSColor(hex: 0x8A7B93), dark: NSColor(hex: 0xB3A4C4))
-        // Always white: it sits on a saturated glow surface (success/danger) in both color
-        // schemes, so it needs to stay light rather than flipping to dark text in dark mode.
-        static let onAccent = Color.dynamic(light: NSColor(hex: 0xFFFBFD), dark: NSColor(hex: 0xFFFBFD))
+        // Always dark purple: it sits on a pastel accent/glow surface in both color schemes,
+        // so it needs to stay dark rather than flipping to light text in dark mode.
+        static let onAccent = Color.dynamic(light: NSColor(hex: 0x3A2E44), dark: NSColor(hex: 0x3A2E44))
+
+        // Top nav header: fixed to the dark-mode background purple in both color schemes, so anything drawn on it
+        // uses these fixed light text colors instead of the scheme-dependent text tokens.
+        static let headerBackground = Color.dynamic(light: NSColor(hex: 0x1C1826), dark: NSColor(hex: 0x1C1826))
+        static let headerText = Color.dynamic(light: NSColor(hex: 0xF5ECF7), dark: NSColor(hex: 0xF5ECF7))
+        static let headerTextSecondary = Color.dynamic(light: NSColor(hex: 0xB3A4C4), dark: NSColor(hex: 0xB3A4C4))
+    }
+}
+
+private struct OnDarkHeaderKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// True inside the dark purple top nav header; shared controls (tabs, segmented tabs) switch
+    /// their unselected text and fills to light-on-dark variants.
+    var onDarkHeader: Bool {
+        get { self[OnDarkHeaderKey.self] }
+        set { self[OnDarkHeaderKey.self] = newValue }
     }
 }
 
