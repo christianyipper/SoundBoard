@@ -60,7 +60,7 @@ struct HotkeySlotView: View {
                 .frame(width: 24, height: 24)
                 .background(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(DesignSystem.Colors.surfaceTint.opacity(0.6))
+                        .fill(isActive ? DesignSystem.Colors.successGlow.opacity(0.6) : DesignSystem.Colors.textSecondary.opacity(0.25))
                 )
                 .padding(.top, 8)
                 .padding(.leading, 8)

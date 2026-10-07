@@ -145,16 +145,43 @@ struct MusicPlayerView: View {
             .pointerCursor()
             .help(microphoneManager.isLive ? "Mute the microphone" : "Go live on the microphone")
 
-            HStack(spacing: 6) {
-                Image(systemName: volumeIconName)
-                    .font(.system(size: 12))
-                    .foregroundStyle(DesignSystem.Colors.textSecondary)
-                    .frame(width: 14)
+            VStack(spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: volumeIconName)
+                        .font(.system(size: 12))
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .frame(width: 14)
 
-                Slider(value: $settingsStore.settings.volume, in: 0...1)
-                    .frame(width: 90)
+                    SnappingSlider(value: $settingsStore.settings.volume)
+                        .frame(width: 144)
+
+                    percentLabel(settingsStore.settings.volume)
+                }
+                .help("Sound volume")
+
+                HStack(spacing: 6) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(DesignSystem.Colors.textSecondary)
+                        .frame(width: 14)
+
+                    SnappingSlider(value: $settingsStore.settings.microphoneVolume)
+                        .frame(width: 144)
+
+                    percentLabel(settingsStore.settings.microphoneVolume)
+                }
+                .help("Mic volume")
             }
         }
+    }
+
+    /// Fixed-width so the sliders don't shift as the value goes between 1, 2 and 3 digits.
+    private func percentLabel(_ value: Float) -> some View {
+        Text("\(Int((value * 100).rounded()))%")
+            .font(.system(size: 12, weight: .medium, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(DesignSystem.Colors.textSecondary)
+            .frame(width: 36, alignment: .trailing)
     }
 
     private var volumeIconName: String {

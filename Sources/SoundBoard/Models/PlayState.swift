@@ -16,7 +16,7 @@ enum PlayState {
     var foregroundColor: Color {
         switch self {
         case .idle, .played: return DesignSystem.Colors.textPrimary
-        case .playing: return DesignSystem.Colors.onAccent
+        case .playing: return .white
         }
     }
 
