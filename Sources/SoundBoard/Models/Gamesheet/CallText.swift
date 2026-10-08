@@ -11,10 +11,12 @@ enum CallText {
         return "\(goal.time) - \(numbers.joined(separator: ", "))"
     }
 
-    /// e.g. "08:10 - #45, (Major and Game Misconduct) Fighting".
+    /// e.g. "08:10 - #45, (Major and Game Misconduct) Fighting", or with someone serving it
+    /// "08:10 - #45 (#12), (Minor) Boarding".
     static func sheetPenalty(_ penalty: PenaltyEntry) -> String {
         let types = penalty.types.map(\.fullName).joined(separator: " and ")
-        return "\(penalty.time) - #\(penalty.playerNumber), (\(types)) \(penalty.infraction.fullName)"
+        let servedBy = penalty.servedBy.map { " (#\($0))" } ?? ""
+        return "\(penalty.time) - #\(penalty.playerNumber)\(servedBy), (\(types)) \(penalty.infraction.fullName)"
     }
 
     // MARK: - Officials

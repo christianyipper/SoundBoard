@@ -168,8 +168,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         playedIDs.removeAll()
     }
 
-    func play(_ sound: Sound, fileURL: URL) {
-        guard beginPlayback(sound, fileURL: fileURL, startVolume: volume) != nil else { return }
+    /// Starts `sound` from the beginning, or from `startTime` seconds in when given (e.g. the
+    /// music player resuming from wherever the user scrubbed its timeline to while paused).
+    func play(_ sound: Sound, fileURL: URL, from startTime: TimeInterval = 0) {
+        guard beginPlayback(sound, fileURL: fileURL, startVolume: volume, startTime: startTime) != nil else { return }
         playingIDs.insert(sound.id)
         playedIDs.remove(sound.id)
     }
@@ -200,6 +202,21 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         pause(fromSoundID, fadeDuration: crossFadeDuration)
     }
 
+    /// Jumps a currently playing sound to `time` seconds in, without interrupting its playing
+    /// state. Ignored if the sound isn't playing.
+    func seek(_ soundID: UUID, to time: TimeInterval) {
+        guard playingIDs.contains(soundID), let channel = channels[soundID] else { return }
+        // Drop any in-progress fade-in so the new position plays at full volume.
+        channel.fadeWorkItem?.cancel()
+        channel.fadeWorkItem = nil
+        channel.playerNode.volume = volume
+        // stop() fires the old segment's completion handler; the generation bump in
+        // schedule(_:soundID:fromFrame:) makes handleFinished ignore it.
+        channel.playerNode.stop()
+        schedule(channel, soundID: soundID, fromFrame: frame(for: time, in: channel))
+        channel.playerNode.play()
+    }
+
     /// Stops playback and rewinds to the start, rather than pausing in place — so toggling the
     /// same sound off and back on again always restarts it from the beginning instead of
     /// resuming from wherever it was left off. Fades out over `fadeDuration` seconds (defaulting
@@ -224,7 +241,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     /// (starts at 0, then fades in) can share the same channel setup/scheduling logic. Returns
     /// nil if the file can't be opened.
     @discardableResult
-    private func beginPlayback(_ sound: Sound, fileURL: URL, startVolume: Float) -> Channel? {
+    private func beginPlayback(_ sound: Sound, fileURL: URL, startVolume: Float, startTime: TimeInterval = 0) -> Channel? {
         let channel: Channel
         if let existing = channels[sound.id] {
             channel = existing
@@ -259,22 +276,41 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         channel.playerNode.volume = startVolume
         startEngineIfNeeded()
 
-        if channel.needsScheduling {
-            channel.needsScheduling = false
-            channel.file.framePosition = 0
-            channel.scheduleGeneration += 1
-            let generation = channel.scheduleGeneration
-            // completionCallbackType defaults to .dataConsumed, which fires as soon as the
-            // buffer is handed to the node's queue — almost immediately, well before the audio
-            // has actually finished playing. .dataPlayedBack is what actually waits for playback.
-            channel.playerNode.scheduleFile(channel.file, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-                DispatchQueue.main.async {
-                    self?.handleFinished(sound.id, generation: generation)
-                }
+        if startTime > 0 {
+            // Starting mid-file: discard whatever was scheduled (if anything) and start over
+            // from the requested position.
+            if !channel.needsScheduling {
+                channel.playerNode.stop()
             }
+            schedule(channel, soundID: sound.id, fromFrame: frame(for: startTime, in: channel))
+        } else if channel.needsScheduling {
+            schedule(channel, soundID: sound.id, fromFrame: 0)
         }
         channel.playerNode.play()
         return channel
+    }
+
+    /// Queues the channel's file from `startFrame` to its end. Each call bumps the channel's
+    /// generation so the completion handler of anything scheduled before is ignored.
+    private func schedule(_ channel: Channel, soundID: UUID, fromFrame startFrame: AVAudioFramePosition) {
+        channel.needsScheduling = false
+        channel.scheduleGeneration += 1
+        let generation = channel.scheduleGeneration
+        let frameCount = AVAudioFrameCount(max(channel.file.length - startFrame, 0))
+        // completionCallbackType defaults to .dataConsumed, which fires as soon as the
+        // buffer is handed to the node's queue — almost immediately, well before the audio
+        // has actually finished playing. .dataPlayedBack is what actually waits for playback.
+        channel.playerNode.scheduleSegment(channel.file, startingFrame: startFrame, frameCount: frameCount, at: nil, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.handleFinished(soundID, generation: generation)
+            }
+        }
+    }
+
+    /// The file frame at `time` seconds in, clamped to the file's bounds.
+    private func frame(for time: TimeInterval, in channel: Channel) -> AVAudioFramePosition {
+        let frame = AVAudioFramePosition(time * channel.file.processingFormat.sampleRate)
+        return min(max(frame, 0), max(channel.file.length - 1, 0))
     }
 
     /// Ramps the channel's volume down to zero over `duration` using an equal-power curve (a

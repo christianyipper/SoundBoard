@@ -546,6 +546,7 @@ private struct RosterPanel: View {
 private struct TeamPanel: View {
     @EnvironmentObject private var gameStore: GameStore
     @EnvironmentObject private var rosterStore: RosterStore
+    @EnvironmentObject private var settingsStore: SettingsStore
 
     let side: TeamSide
     var focus: FocusState<GamesheetField?>.Binding
@@ -597,22 +598,24 @@ private struct TeamPanel: View {
 
     /// Small key badge for the shot hotkey, styled like the hotkey bar's but faded so it doesn't
     /// compete with the +/- icon.
-    @ViewBuilder
     private func shotKeyBadge(delta: Int) -> some View {
-        if let key = ShortcutManager.shotKey(for: side, delta: delta) {
-            Text(key)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(DesignSystem.Colors.textPrimary)
-                .frame(width: 16, height: 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(DesignSystem.Colors.textSecondary.opacity(0.25))
-                )
-                .padding(.top, 4)
-                .padding(.leading, 4)
-                .opacity(0.2)
-                .allowsHitTesting(false)
-        }
+        let key = SoundShortcut.keyName(for: settingsStore.settings.shotHotkeys.keyCode(for: side, delta: delta))
+        // Dark on the accent-filled + button, light on the grey - button.
+        let ink = delta > 0 ? DesignSystem.Colors.onAccent : DesignSystem.Colors.textPrimary
+        let tint = delta > 0 ? DesignSystem.Colors.onAccent : DesignSystem.Colors.textSecondary
+        return Text(key)
+            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .foregroundStyle(ink)
+            .padding(.horizontal, 3)
+            .frame(minWidth: 16, minHeight: 16)
+            .background(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(tint.opacity(0.25))
+            )
+            .padding(.top, 4)
+            .padding(.leading, 4)
+            .opacity(0.5)
+            .allowsHitTesting(false)
     }
 
     private var goalCard: some View {
@@ -720,11 +723,13 @@ private struct PeriodPanel: View {
 }
 
 /// Center column, under the clock: the game's two referees and two linespeople, with the
-/// announcement that introduces them underneath, filled in as they're typed.
+/// announcement that introduces them in a dropdown underneath, filled in as they're typed.
 private struct OfficialsPanel: View {
     @EnvironmentObject private var gameStore: GameStore
 
     var focus: FocusState<GamesheetField?>.Binding
+
+    @State private var isAnnouncementExpanded = false
 
     var body: some View {
         VStack(spacing: 8) {
@@ -740,17 +745,40 @@ private struct OfficialsPanel: View {
                 }
             }
 
-            Text(CallText.officialsAnnouncement(
-                homeTeam: gameStore.teamName(for: .home),
-                awayTeam: gameStore.teamName(for: .away),
-                officials: gameStore.game.officials
-            ))
-            .font(DesignSystem.Typography.caption)
-            .foregroundStyle(DesignSystem.Colors.textSecondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .textSelection(.enabled)
+            HStack {
+                Button {
+                    withAnimation(DesignSystem.Motion.springSmooth) {
+                        isAnnouncementExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.down")
+                            .rotationEffect(.degrees(isAnnouncementExpanded ? 180 : 0))
+                        Text("Announcement")
+                    }
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .help(isAnnouncementExpanded ? "Hide announcement" : "Show announcement")
+                .pointerCursor()
+                Spacer()
+            }
             .padding(.top, 4)
+
+            if isAnnouncementExpanded {
+                Text(CallText.officialsAnnouncement(
+                    homeTeam: gameStore.teamName(for: .home),
+                    awayTeam: gameStore.teamName(for: .away),
+                    officials: gameStore.game.officials
+                ))
+                .font(DesignSystem.Typography.caption)
+                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            }
         }
         .gamesheetCard()
     }
@@ -835,21 +863,16 @@ private struct PenaltyPanel: View {
             .pointerCursor()
             .help("Click to pick the infraction and penalty type")
 
-            VStack(spacing: 2) {
-                GamesheetTextField(
-                    placeholder: "#",
-                    text: Binding(
-                        get: { row.playerNumber },
-                        set: { value in gameStore.updatePenaltyRow(side: side, index: index) { $0.playerNumber = JerseyNumber.sanitized(value) } }
-                    ),
-                    field: .penaltyNumber(side, index),
-                    focus: focus,
-                    accent: side.accent
-                )
-                if !row.playerNumber.isEmpty && gameStore.hasRoster(side) {
-                    PlayerCaption(number: row.playerNumber, side: side)
-                }
-            }
+            GamesheetTextField(
+                placeholder: "#",
+                text: Binding(
+                    get: { row.playerNumber },
+                    set: { value in gameStore.updatePenaltyRow(side: side, index: index) { $0.playerNumber = JerseyNumber.sanitized(value) } }
+                ),
+                field: .penaltyNumber(side, index),
+                focus: focus,
+                accent: side.accent
+            )
             .frame(width: 64)
             .help("Penalized player's number")
 

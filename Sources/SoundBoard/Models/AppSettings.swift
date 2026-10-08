@@ -24,6 +24,8 @@ struct AppSettings: Codable, Equatable {
     var normalizeLoudness: Bool
     /// Mic passthrough volume, 0...1, applied to the microphone engine's output.
     var microphoneVolume: Float
+    /// Keys that add/remove a gamesheet shot for each side.
+    var shotHotkeys: ShotHotkeys
 
     static let `default` = AppSettings(
         fadeOutDuration: 0,
@@ -34,7 +36,7 @@ struct AppSettings: Codable, Equatable {
     )
 
     private enum CodingKeys: String, CodingKey {
-        case fadeOutDuration, volume, reverbAmount, microphoneDeviceID, crossFadeDuration, appearance, microphoneHotkeyMode, normalizeLoudness, microphoneVolume
+        case fadeOutDuration, volume, reverbAmount, microphoneDeviceID, crossFadeDuration, appearance, microphoneHotkeyMode, normalizeLoudness, microphoneVolume, shotHotkeys
     }
 
     init(
@@ -46,7 +48,8 @@ struct AppSettings: Codable, Equatable {
         appearance: AppAppearance = .system,
         microphoneHotkeyMode: MicrophoneHotkeyMode = .toggle,
         normalizeLoudness: Bool = true,
-        microphoneVolume: Float = 1.0
+        microphoneVolume: Float = 1.0,
+        shotHotkeys: ShotHotkeys = .default
     ) {
         self.fadeOutDuration = fadeOutDuration
         self.volume = volume
@@ -57,10 +60,11 @@ struct AppSettings: Codable, Equatable {
         self.microphoneHotkeyMode = microphoneHotkeyMode
         self.normalizeLoudness = normalizeLoudness
         self.microphoneVolume = microphoneVolume
+        self.shotHotkeys = shotHotkeys
     }
 
     // Custom Codable so settings saved before crossFadeDuration/appearance/microphoneHotkeyMode/
-    // normalizeLoudness/microphoneVolume existed still load correctly, defaulting new fields instead of failing decode entirely and
+    // normalizeLoudness/microphoneVolume/shotHotkeys existed still load correctly, defaulting new fields instead of failing decode entirely and
     // silently resetting every other saved setting back to .default.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -73,6 +77,7 @@ struct AppSettings: Codable, Equatable {
         microphoneHotkeyMode = try container.decodeIfPresent(MicrophoneHotkeyMode.self, forKey: .microphoneHotkeyMode) ?? .toggle
         normalizeLoudness = try container.decodeIfPresent(Bool.self, forKey: .normalizeLoudness) ?? true
         microphoneVolume = try container.decodeIfPresent(Float.self, forKey: .microphoneVolume) ?? 1.0
+        shotHotkeys = try container.decodeIfPresent(ShotHotkeys.self, forKey: .shotHotkeys) ?? .default
     }
 }
 

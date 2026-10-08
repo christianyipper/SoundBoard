@@ -3,8 +3,12 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
     @EnvironmentObject private var rosterStore: RosterStore
+    @EnvironmentObject private var shortcutManager: ShortcutManager
 
     @State private var availableInputDevices: [AudioInputDevice] = []
+    /// The shot hotkey waiting for a key press, if any.
+    @State private var recordingShotAction: ShotHotkeys.Action?
+    @State private var shotHotkeyMessage: String?
 
     var body: some View {
         Form {
@@ -52,6 +56,36 @@ struct SettingsView: View {
                     Text("Reverb: \(Int(settingsStore.settings.reverbAmount))%")
                     Slider(value: $settingsStore.settings.reverbAmount, in: 0...100)
                 }
+            }
+
+            Section("Gamesheet Shot Hotkeys") {
+                ForEach(ShotHotkeys.actions) { action in
+                    LabeledContent(action.label) {
+                        Button {
+                            recordShotHotkey(for: action)
+                        } label: {
+                            Text(recordingShotAction == action
+                                ? "Press a key…"
+                                : SoundShortcut.keyName(for: settingsStore.settings.shotHotkeys[action]))
+                                .frame(minWidth: 90)
+                        }
+                        .buttonStyle(.bordered)
+                        .pointerCursor()
+                    }
+                }
+
+                Text(shotHotkeyMessage ?? "Click a key, then press the new key. Escape cancels. Picking a key another shot hotkey uses swaps the two.")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(shotHotkeyMessage == nil ? DesignSystem.Colors.textSecondary : DesignSystem.Colors.dangerGlow)
+
+                Button("Reset to A / Z / D / C") {
+                    shortcutManager.cancelRecording()
+                    recordingShotAction = nil
+                    shotHotkeyMessage = nil
+                    settingsStore.settings.shotHotkeys = .default
+                }
+                .buttonStyle(.borderless)
+                .pointerCursor()
             }
 
             Section("Music Player") {
@@ -102,6 +136,27 @@ struct SettingsView: View {
         .frame(width: 380)
         .onAppear {
             refreshInputDevices()
+        }
+        .onDisappear {
+            shortcutManager.cancelRecording()
+            recordingShotAction = nil
+        }
+    }
+
+    private func recordShotHotkey(for action: ShotHotkeys.Action) {
+        recordingShotAction = action
+        shotHotkeyMessage = nil
+        shortcutManager.beginRecording { shortcut in
+            DispatchQueue.main.async {
+                recordingShotAction = nil
+                guard shortcut.keyCode != ShortcutManager.escapeKeyCode else { return }
+                if let reason = ShortcutManager.reservedUse(ofKeyCode: shortcut.keyCode) {
+                    shotHotkeyMessage = reason
+                    return
+                }
+                // Shot keys only fire without modifiers, so only the key itself is kept.
+                settingsStore.settings.shotHotkeys.assign(shortcut.keyCode, to: action)
+            }
         }
     }
 

@@ -3,13 +3,13 @@ import SwiftUI
 /// Folder-driven background music player shown below the hotkey bar, styled like a Spotify
 /// "now playing" bar: folder picker + current track on the left, transport controls and
 /// timeline centered, mic toggle and volume on the right. The picker lists the folders of the
-/// sound library every game shares; press Space (or the center Play button) to shuffle through the
-/// selected folder's sounds. Pressing Space again stops the
-/// current track and cues the next one for next time, rather than resuming it; a track that
-/// finishes on its own advances automatically. Back/Skip jump to the previous/next track in the
-/// shuffle order, preserving play/pause state: they play immediately if music was already
-/// playing, or just cue the new track (silent) if it was paused. "Reset" re-shuffles the
-/// selected folder from scratch, discarding the current play order.
+/// sound library every game shares; press Space (or the center Play button) to play through the
+/// selected folder's sounds. Pressing Space again stops the current track and cues the next one
+/// for next time, rather than resuming it; a track that finishes on its own does the same,
+/// cueing the next one without playing it. Back/Skip jump to the previous/next track in the play
+/// order, preserving play/pause state: they play immediately if music was already playing, or
+/// just cue the new track (silent) if it was paused. The shuffle button toggles between a
+/// shuffled order and folder order, carrying on from the current track either way.
 struct MusicPlayerView: View {
     /// The shared sound library, whose folders the picker offers.
     let playlist: Playlist
@@ -77,11 +77,17 @@ struct MusicPlayerView: View {
             .frame(maxWidth: 200, alignment: .leading)
             .pointerCursor()
 
-            Text(trackLabel)
-                .font(DesignSystem.Typography.callout)
-                .foregroundStyle(musicPlayerStore.isPlaying ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 6) {
+                if musicPlayerStore.currentSound != nil {
+                    LevelsIndicator(isAnimating: musicPlayerStore.isPlaying)
+                }
+
+                Text(trackLabel)
+                    .font(DesignSystem.Typography.callout)
+                    .foregroundStyle(musicPlayerStore.isPlaying ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -117,7 +123,7 @@ struct MusicPlayerView: View {
                     .buttonStyle(.plain)
                     .disabled(musicPlayerStore.currentSound == nil)
                     .pointerCursor()
-                    .help("Play/pause the shuffled folder (Space)")
+                    .help("Play/pause this folder (Space)")
 
                     TransportButton(systemImage: "forward.fill", size: 15) {
                         musicPlayerStore.skipToNext()
@@ -128,19 +134,21 @@ struct MusicPlayerView: View {
 
                 HStack {
                     Spacer()
-                    TransportButton(systemImage: "shuffle", size: 13) {
-                        musicPlayerStore.resetShuffle()
+                    TransportButton(
+                        systemImage: "shuffle",
+                        size: 13,
+                        isActive: musicPlayerStore.isShuffled
+                    ) {
+                        musicPlayerStore.toggleShuffle()
                     }
-                    .disabled(musicPlayerStore.selectedFolderID == nil || musicPlayerStore.isPlaying)
-                    .help(musicPlayerStore.isPlaying
-                        ? "Pause to re-shuffle this folder"
-                        : "Re-shuffle this folder from the start")
+                    .help(musicPlayerStore.isShuffled ? "Turn shuffle off" : "Shuffle this folder")
                 }
             }
 
             TimelineView(
                 elapsed: musicPlayerStore.elapsedTime,
-                duration: musicPlayerStore.currentDuration
+                duration: musicPlayerStore.currentDuration,
+                onSeek: musicPlayerStore.seek(to:)
             )
         }
     }
@@ -217,17 +225,18 @@ struct MusicPlayerView: View {
 }
 
 /// Small round icon-only transport button (back/skip/shuffle), lighter weight than the primary
-/// play/pause control.
+/// play/pause control. `isActive` brightens the icon for toggles that are switched on.
 private struct TransportButton: View {
     let systemImage: String
     var size: CGFloat = 14
+    var isActive = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: size, weight: .medium))
-                .foregroundStyle(DesignSystem.Colors.textSecondary)
+                .font(.system(size: size, weight: isActive ? .bold : .medium))
+                .foregroundStyle(isActive ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.textSecondary)
                 .frame(width: 26, height: 26)
         }
         .buttonStyle(.plain)
@@ -235,36 +244,122 @@ private struct TransportButton: View {
     }
 }
 
-/// Thin progress bar with elapsed/remaining time labels, mirroring Spotify's now-playing
-/// timeline. Read-only: the player has no seek capability, so it's a status display, not a
-/// scrubber.
+/// Three bouncing level bars next to the track name, like Spotify's now-playing indicator.
+/// Bounces in the accent color while playing; rests as short, dim bars while paused.
+private struct LevelsIndicator: View {
+    let isAnimating: Bool
+
+    private static let barWidth: CGFloat = 3
+    private static let maxHeight: CGFloat = 12
+    private static let restingFraction: CGFloat = 0.3
+    /// Each bar bounces at its own speed and phase so they don't move in lockstep.
+    private static let bars: [(speed: Double, phase: Double)] = [(7.0, 0), (9.5, 1.7), (6.0, 3.1)]
+
+    var body: some View {
+        // Fully qualified: this file's own TimelineView (the progress bar) shadows SwiftUI's.
+        SwiftUI.TimelineView(.animation(paused: !isAnimating)) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
+            HStack(alignment: .bottom, spacing: 2) {
+                ForEach(Self.bars.indices, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(isAnimating ? DesignSystem.Colors.accentPrimary : DesignSystem.Colors.textSecondary)
+                        .frame(width: Self.barWidth, height: Self.maxHeight * fraction(for: index, at: time))
+                }
+            }
+            .frame(height: Self.maxHeight, alignment: .bottom)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func fraction(for index: Int, at time: TimeInterval) -> CGFloat {
+        guard isAnimating else { return Self.restingFraction }
+        let bar = Self.bars[index]
+        let wave = (sin(time * bar.speed + bar.phase) + 1) / 2
+        return Self.restingFraction + (1 - Self.restingFraction) * CGFloat(wave)
+    }
+}
+
+/// Thin progress bar with elapsed/total time labels, mirroring Spotify's now-playing timeline.
+/// Click or drag anywhere on the bar to scrub: the playhead follows the pointer while dragging
+/// and the audio jumps there on release (or, while paused, the next play starts from there).
 private struct TimelineView: View {
     let elapsed: TimeInterval
     let duration: TimeInterval?
+    let onSeek: (TimeInterval) -> Void
+
+    /// Progress (0...1) under the pointer mid-drag; overrides `elapsed` until released so the
+    /// playhead doesn't snap back between the store's ticks.
+    @State private var dragProgress: Double?
+    @State private var isHovering = false
+
+    private static let barHeight: CGFloat = 4
+    private static let knobSize: CGFloat = 12
 
     private var progress: Double {
+        if let dragProgress { return dragProgress }
         guard let duration, duration > 0 else { return 0 }
         return min(elapsed / duration, 1)
     }
 
+    private var displayedElapsed: TimeInterval {
+        guard let dragProgress, let duration else { return elapsed }
+        return dragProgress * duration
+    }
+
+    private var canSeek: Bool {
+        (duration ?? 0) > 0
+    }
+
+    private var isActive: Bool {
+        canSeek && (isHovering || dragProgress != nil)
+    }
+
     var body: some View {
         HStack(spacing: 8) {
-            Text(Self.format(elapsed))
+            Text(Self.format(displayedElapsed))
                 .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
                 .monospacedDigit()
                 .frame(width: 40, alignment: .trailing)
 
             GeometryReader { geometry in
+                let width = geometry.size.width
                 ZStack(alignment: .leading) {
                     Capsule()
                         .fill(DesignSystem.Colors.border)
+                        .frame(height: Self.barHeight)
                     Capsule()
-                        .fill(DesignSystem.Colors.textPrimary)
-                        .frame(width: geometry.size.width * progress)
+                        .fill(isActive ? DesignSystem.Colors.accentPrimary : DesignSystem.Colors.textPrimary)
+                        .frame(width: width * progress, height: Self.barHeight)
+                    if isActive {
+                        Circle()
+                            .fill(DesignSystem.Colors.textPrimary)
+                            .frame(width: Self.knobSize, height: Self.knobSize)
+                            .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                            .offset(x: width * progress - Self.knobSize / 2)
+                    }
                 }
+                .frame(maxHeight: .infinity)
+                // The whole row (not just the 4pt-tall bar) is the hit target.
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            guard canSeek, width > 0 else { return }
+                            dragProgress = min(max(value.location.x / width, 0), 1)
+                        }
+                        .onEnded { value in
+                            guard canSeek, let duration, width > 0 else { return }
+                            let fraction = min(max(value.location.x / width, 0), 1)
+                            onSeek(fraction * duration)
+                            dragProgress = nil
+                        }
+                )
+                .onHover { isHovering = $0 }
             }
-            .frame(height: 4)
+            .frame(height: Self.knobSize + 4)
+            .pointerCursor()
+            .help(canSeek ? "Drag to scrub" : "")
 
             Text(duration.map(Self.format) ?? "--:--")
                 .font(.system(size: 12, weight: .medium, design: .rounded))

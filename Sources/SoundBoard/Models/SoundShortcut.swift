@@ -34,7 +34,7 @@ struct SoundShortcut: Codable, Equatable, Hashable {
         return result
     }
 
-    private static func keyName(for keyCode: UInt16) -> String {
+    static func keyName(for keyCode: UInt16) -> String {
         Self.keyCodeNames[keyCode] ?? "?"
     }
 

@@ -19,6 +19,11 @@ final class CallTextTests: XCTestCase {
         XCTAssertEqual(CallText.sheetPenalty(penalty), "08:10 - #45, (Major and Game Misconduct) Fighting")
     }
 
+    func testSheetPenaltyShowsServingPlayer() {
+        let penalty = PenaltyEntry(team: .home, period: .first, time: "04:20", infraction: .boarding, types: [.minor], playerNumber: "45", servedBy: "12")
+        XCTAssertEqual(CallText.sheetPenalty(penalty), "04:20 - #45 (#12), (Minor) Boarding")
+    }
+
     func testCallGoal() {
         let goal = GoalEntry(team: .home, period: .first, time: "12:45", strength: .even, scorer: "12", assist1: "5", assist2: "7")
         XCTAssertEqual(
