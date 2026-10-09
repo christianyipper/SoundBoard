@@ -731,12 +731,18 @@ private struct OfficialsPanel: View {
 
     @State private var isAnnouncementExpanded = false
 
+    private static let roleLabelWidth: CGFloat = 52
+
     var body: some View {
         VStack(spacing: 8) {
-            HStack {
+            // Sits over the name fields (past the role labels) so it centers with their text.
+            HStack(spacing: 8) {
+                Color.clear
+                    .frame(width: Self.roleLabelWidth, height: 0)
                 Text("Officials")
-                    .font(DesignSystem.Typography.headline)
-                Spacer()
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundStyle(DesignSystem.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
             }
 
             ForEach(Officials.Role.allCases, id: \.self) { role in
@@ -788,7 +794,7 @@ private struct OfficialsPanel: View {
             Text(role.label)
                 .font(DesignSystem.Typography.caption)
                 .foregroundStyle(DesignSystem.Colors.textSecondary)
-                .frame(width: 52, alignment: .leading)
+                .frame(width: Self.roleLabelWidth, alignment: .leading)
             GamesheetTextField(
                 placeholder: "Name",
                 text: Binding(

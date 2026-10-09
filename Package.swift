@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "SoundBoard",
+    name: "Scorely",
     platforms: [
         .macOS(.v14)
     ],
     targets: [
         .executableTarget(
-            name: "SoundBoard",
-            path: "Sources/SoundBoard"
+            name: "Scorely",
+            path: "Sources/Scorely"
         ),
         .testTarget(
-            name: "SoundBoardTests",
-            dependencies: ["SoundBoard"],
-            path: "Tests/SoundBoardTests"
+            name: "ScorelyTests",
+            dependencies: ["Scorely"],
+            path: "Tests/ScorelyTests"
         )
     ]
 )

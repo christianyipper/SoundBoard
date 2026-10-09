@@ -1,6 +1,6 @@
 import AppKit
 import XCTest
-@testable import SoundBoard
+@testable import Scorely
 
 final class ShortcutManagerTests: XCTestCase {
     private var tempDirectory: URL!

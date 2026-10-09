@@ -1,5 +1,5 @@
 import XCTest
-@testable import SoundBoard
+@testable import Scorely
 
 final class GameStoreTests: XCTestCase {
     private var tempDirectory: URL!

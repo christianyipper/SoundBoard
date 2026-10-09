@@ -1,4 +1,5 @@
-import Foundation
+import AVFoundation
+@testable import Scorely
 
 /// Shared fixture generator: a minimal valid PCM WAV so AVAudioPlayer can actually load it in tests.
 enum TestAudioFixture {
@@ -43,5 +44,17 @@ extension Data {
 
     mutating func append(littleEndian value: UInt16) {
         Swift.withUnsafeBytes(of: value.littleEndian) { append(contentsOf: $0) }
+    }
+}
+
+extension AudioPlayerManager {
+    /// A manager whose loudness cache already has `urls` analyzed, as they would be after import,
+    /// so play() starts them synchronously instead of waiting on a background analysis.
+    static func withAnalyzedFiles(_ urls: [URL], engine: AVAudioEngine = AVAudioEngine()) -> AudioPlayerManager {
+        let cache = LoudnessCache()
+        for url in urls {
+            _ = cache.measurementAnalyzingIfNeeded(for: url)
+        }
+        return AudioPlayerManager(loudnessCache: cache, engine: engine)
     }
 }

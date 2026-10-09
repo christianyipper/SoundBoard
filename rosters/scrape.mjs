@@ -9,7 +9,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 const BASE = 'https://www.juniorprospectshockeyleague.com';
 const OUTPUT = new URL('./rosters.json', import.meta.url);
-const USER_AGENT = 'Mozilla/5.0 (SoundBoard roster sync)';
+const USER_AGENT = 'Mozilla/5.0 (Scorely roster sync)';
 
 const decodeEntities = (s) =>
   s

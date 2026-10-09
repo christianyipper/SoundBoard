@@ -1,6 +1,6 @@
 import AVFoundation
 import XCTest
-@testable import SoundBoard
+@testable import Scorely
 
 /// Renders sounds through AudioPlayerManager's real graph offline and checks the output keeps the
 /// source's pitch/speed — reverb and loudness matching must only ever change level, never rate.
@@ -34,7 +34,7 @@ final class PlaybackFidelityTests: XCTestCase {
         let engine = AVAudioEngine()
         let outputFormat = AVAudioFormat(standardFormatWithSampleRate: outputRate, channels: 2)!
         try engine.enableManualRenderingMode(.offline, format: outputFormat, maximumFrameCount: 4096)
-        let manager = AudioPlayerManager(engine: engine)
+        let manager = AudioPlayerManager.withAnalyzedFiles([url], engine: engine)
         manager.normalizeLoudness = normalize
         manager.play(Sound(name: "Tone", fileName: url.lastPathComponent), fileURL: url)
 

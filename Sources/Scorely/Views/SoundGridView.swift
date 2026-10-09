@@ -139,7 +139,7 @@ struct SoundGridView: View {
         } message: {
             Text(importError ?? "")
         }
-        .navigationTitle(playlist.name)
+        .navigationTitle("Scorely")
     }
 
     // MARK: - Browsing tabs

@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		000100000000000000000007 /* SoundBoardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000100000000000000000006 /* SoundBoardApp.swift */; };
+		000100000000000000000007 /* ScorelyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000100000000000000000006 /* ScorelyApp.swift */; };
 		000100000000000000000009 /* AudioPlayerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000100000000000000000008 /* AudioPlayerManager.swift */; };
 		00010000000000000000000B /* ShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00010000000000000000000A /* ShortcutManager.swift */; };
 		00010000000000000000000D /* HotkeyAssignment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00010000000000000000000C /* HotkeyAssignment.swift */; };
@@ -34,7 +34,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		000100000000000000000006 /* SoundBoardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundBoardApp.swift; sourceTree = "<group>"; };
+		000100000000000000000006 /* ScorelyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScorelyApp.swift; sourceTree = "<group>"; };
 		000100000000000000000008 /* AudioPlayerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerManager.swift; sourceTree = "<group>"; };
 		00010000000000000000000A /* ShortcutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutManager.swift; sourceTree = "<group>"; };
 		00010000000000000000000C /* HotkeyAssignment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyAssignment.swift; sourceTree = "<group>"; };
@@ -52,7 +52,7 @@
 		000100000000000000000024 /* SoundGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundGridView.swift; sourceTree = "<group>"; };
 		000100000000000000000026 /* SoundTileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundTileView.swift; sourceTree = "<group>"; };
 		000100000000000000000028 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		00010000000000000000002A /* SoundBoard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SoundBoard.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		00010000000000000000002A /* Scorely.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Scorely.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		000100000000000000000041 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		000100000000000000000043 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 		000100000000000000000045 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -75,7 +75,7 @@
 		00010000000000000000002D = {
 			isa = PBXGroup;
 			children = (
-				00010000000000000000002F /* SoundBoard */,
+				00010000000000000000002F /* Scorely */,
 				000100000000000000000028 /* Assets.xcassets */,
 				00010000000000000000002E /* Products */,
 			);
@@ -84,22 +84,22 @@
 		00010000000000000000002E /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				00010000000000000000002A /* SoundBoard.app */,
+				00010000000000000000002A /* Scorely.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		00010000000000000000002F /* SoundBoard */ = {
+		00010000000000000000002F /* Scorely */ = {
 			isa = PBXGroup;
 			children = (
-				000100000000000000000006 /* SoundBoardApp.swift */,
+				000100000000000000000006 /* ScorelyApp.swift */,
 				000100000000000000000002 /* Audio */,
 				000100000000000000000003 /* Models */,
 				000100000000000000000004 /* Stores */,
 				000100000000000000000005 /* Views */,
 			);
-			name = SoundBoard;
-			path = Sources/SoundBoard;
+			name = Scorely;
+			path = Sources/Scorely;
 			sourceTree = "<group>";
 		};
 		000100000000000000000002 /* Audio */ = {
@@ -155,9 +155,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		00010000000000000000002B /* SoundBoard */ = {
+		00010000000000000000002B /* Scorely */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 000100000000000000000034 /* Build configuration list for PBXNativeTarget "SoundBoard" */;
+			buildConfigurationList = 000100000000000000000034 /* Build configuration list for PBXNativeTarget "Scorely" */;
 			buildPhases = (
 				000100000000000000000030 /* Sources */,
 				000100000000000000000032 /* Frameworks */,
@@ -167,9 +167,9 @@
 			);
 			dependencies = (
 			);
-			name = SoundBoard;
-			productName = SoundBoard;
-			productReference = 00010000000000000000002A /* SoundBoard.app */;
+			name = Scorely;
+			productName = Scorely;
+			productReference = 00010000000000000000002A /* Scorely.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -187,7 +187,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 000100000000000000000033 /* Build configuration list for PBXProject "SoundBoard" */;
+			buildConfigurationList = 000100000000000000000033 /* Build configuration list for PBXProject "Scorely" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -200,7 +200,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				00010000000000000000002B /* SoundBoard */,
+				00010000000000000000002B /* Scorely */,
 			);
 		};
 /* End PBXProject section */
@@ -221,7 +221,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				000100000000000000000007 /* SoundBoardApp.swift in Sources */,
+				000100000000000000000007 /* ScorelyApp.swift in Sources */,
 				000100000000000000000009 /* AudioPlayerManager.swift in Sources */,
 				00010000000000000000000B /* ShortcutManager.swift in Sources */,
 				00010000000000000000000D /* HotkeyAssignment.swift in Sources */,
@@ -378,9 +378,10 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Scorely;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SoundBoard uses the microphone to pass your voice through to the speakers when mic passthrough is turned on.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Scorely uses the microphone to pass your voice through to the speakers when mic passthrough is turned on.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -404,9 +405,10 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Scorely;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SoundBoard uses the microphone to pass your voice through to the speakers when mic passthrough is turned on.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Scorely uses the microphone to pass your voice through to the speakers when mic passthrough is turned on.";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -423,7 +425,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		000100000000000000000033 /* Build configuration list for PBXProject "SoundBoard" */ = {
+		000100000000000000000033 /* Build configuration list for PBXProject "Scorely" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				000100000000000000000035 /* Debug */,
@@ -432,7 +434,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		000100000000000000000034 /* Build configuration list for PBXNativeTarget "SoundBoard" */ = {
+		000100000000000000000034 /* Build configuration list for PBXNativeTarget "Scorely" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				000100000000000000000037 /* Debug */,

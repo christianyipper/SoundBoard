@@ -1,5 +1,5 @@
 import XCTest
-@testable import SoundBoard
+@testable import Scorely
 
 final class CallTextTests: XCTestCase {
     private let names = ["12": "John Smith", "5": "Jane Jones", "45": "Bob Brown"]

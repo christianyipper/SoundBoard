@@ -79,7 +79,25 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var channels: [UUID: Channel] = [:]
     private var cancellables = Set<AnyCancellable>()
     private let loudnessCache: LoudnessCache
-    private let analysisQueue = DispatchQueue(label: "SoundBoard.LoudnessAnalysis", qos: .utility)
+    /// Runs loudness analyses several at a time (decoding a long track takes a moment), leaving a
+    /// core free for the UI and audio.
+    private let analysisQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "Scorely.LoudnessAnalysis"
+        queue.qualityOfService = .userInitiated
+        queue.maxConcurrentOperationCount = max(ProcessInfo.processInfo.activeProcessorCount - 1, 1)
+        return queue
+    }()
+    /// Analyses queued or running, by file, with the callbacks waiting on each. Main thread only.
+    private var pendingAnalyses: [URL: PendingAnalysis] = [:]
+    /// Plays waiting on their file's loudness analysis before starting, by sound. Anything that
+    /// stops a sound clears its entry, so a stale play doesn't start once the analysis lands.
+    private var pendingStarts: [UUID: UUID] = [:]
+
+    private struct PendingAnalysis {
+        let operation: Operation
+        var waiters: [() -> Void] = []
+    }
 
     /// `engine` is injectable so tests can pass one in offline manual-rendering mode and inspect
     /// exactly what the graph produces.
@@ -116,13 +134,46 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     private func analyzeLoudnessInBackground(_ urls: [URL]) {
-        let pending = urls.filter { loudnessCache.measurement(for: $0) == nil }
-        guard !pending.isEmpty else { return }
-        analysisQueue.async { [loudnessCache] in
-            for url in pending {
-                _ = loudnessCache.measurementAnalyzingIfNeeded(for: url)
-            }
+        for url in urls where loudnessCache.measurement(for: url) == nil {
+            enqueueAnalysis(of: url)
         }
+    }
+
+    /// Queues `url` for analysis unless it's already queued or running, and returns its operation.
+    @discardableResult
+    private func enqueueAnalysis(of url: URL) -> Operation {
+        if let pending = pendingAnalyses[url] { return pending.operation }
+        let operation = BlockOperation { [loudnessCache] in
+            _ = loudnessCache.measurementAnalyzingIfNeeded(for: url)
+        }
+        operation.completionBlock = { [weak self] in
+            DispatchQueue.main.async { self?.finishAnalysis(of: url) }
+        }
+        pendingAnalyses[url] = PendingAnalysis(operation: operation)
+        analysisQueue.addOperation(operation)
+        return operation
+    }
+
+    private func finishAnalysis(of url: URL) {
+        guard let pending = pendingAnalyses.removeValue(forKey: url) else { return }
+        // Skip if the file couldn't be analyzed, or applyNormalizationGain would just requeue it.
+        for channel in channels.values where channel.fileURL == url && loudnessCache.measurement(for: url) != nil {
+            applyNormalizationGain(to: channel)
+        }
+        pending.waiters.forEach { $0() }
+    }
+
+    /// Runs `completion` once `url`'s loudness is known, so a sound starts at its normalized level
+    /// rather than audibly jumping to it partway in. Immediate when it's already cached (the usual
+    /// case, since files are analyzed on import) or normalization is off; otherwise the analysis is
+    /// moved to the front of the queue and `completion` runs on the main thread when it's done.
+    private func whenLoudnessReady(for url: URL, _ completion: @escaping () -> Void) {
+        guard normalizeLoudness, loudnessCache.measurement(for: url) == nil else {
+            completion()
+            return
+        }
+        enqueueAnalysis(of: url).queuePriority = .veryHigh
+        pendingAnalyses[url]?.waiters.append(completion)
     }
 
     /// The full duration, in seconds, of `soundID`'s audio file — available once it's been played
@@ -164,16 +215,28 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             channel.playerNode.stop()
             channel.needsScheduling = true
         }
+        pendingStarts.removeAll()
         playingIDs.removeAll()
         playedIDs.removeAll()
     }
 
     /// Starts `sound` from the beginning, or from `startTime` seconds in when given (e.g. the
     /// music player resuming from wherever the user scrubbed its timeline to while paused).
+    ///
+    /// The sound is marked playing right away, though its audio may start a moment later if its
+    /// loudness hasn't been analyzed yet (see whenLoudnessReady(for:_:)).
     func play(_ sound: Sound, fileURL: URL, from startTime: TimeInterval = 0) {
-        guard beginPlayback(sound, fileURL: fileURL, startVolume: volume, startTime: startTime) != nil else { return }
+        let token = UUID()
+        pendingStarts[sound.id] = token
         playingIDs.insert(sound.id)
         playedIDs.remove(sound.id)
+        whenLoudnessReady(for: fileURL) { [weak self] in
+            guard let self, self.pendingStarts[sound.id] == token else { return }
+            self.pendingStarts[sound.id] = nil
+            if self.beginPlayback(sound, fileURL: fileURL, startVolume: self.volume, startTime: startTime) == nil {
+                self.playingIDs.remove(sound.id)
+            }
+        }
     }
 
     /// Crosses over from `fromSoundID` to `sound`: fades the outgoing sound down to silence while
@@ -194,18 +257,30 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         // @Published mutations, so publishing the outgoing sound's removal first would briefly
         // publish `playingIDs` containing neither sound, which could misread as both having
         // stopped to an observer (e.g. the music player's own "did it finish?" check).
-        guard let channel = beginPlayback(sound, fileURL: fileURL, startVolume: 0) else { return }
+        // The outgoing sound keeps playing until the incoming one is ready to start.
+        let token = UUID()
+        pendingStarts[sound.id] = token
         playingIDs.insert(sound.id)
         playedIDs.remove(sound.id)
-        fadeIn(channel, to: volume, duration: crossFadeDuration)
-
-        pause(fromSoundID, fadeDuration: crossFadeDuration)
+        whenLoudnessReady(for: fileURL) { [weak self] in
+            guard let self, self.pendingStarts[sound.id] == token else { return }
+            self.pendingStarts[sound.id] = nil
+            guard let channel = self.beginPlayback(sound, fileURL: fileURL, startVolume: 0) else {
+                self.playingIDs.remove(sound.id)
+                return
+            }
+            self.fadeIn(channel, to: self.volume, duration: self.crossFadeDuration)
+            if self.playingIDs.contains(fromSoundID) {
+                self.pause(fromSoundID, fadeDuration: self.crossFadeDuration)
+            }
+        }
     }
 
     /// Jumps a currently playing sound to `time` seconds in, without interrupting its playing
     /// state. Ignored if the sound isn't playing.
     func seek(_ soundID: UUID, to time: TimeInterval) {
-        guard playingIDs.contains(soundID), let channel = channels[soundID] else { return }
+        guard playingIDs.contains(soundID), pendingStarts[soundID] == nil,
+              let channel = channels[soundID] else { return }
         // Drop any in-progress fade-in so the new position plays at full volume.
         channel.fadeWorkItem?.cancel()
         channel.fadeWorkItem = nil
@@ -222,6 +297,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     /// resuming from wherever it was left off. Fades out over `fadeDuration` seconds (defaulting
     /// to `fadeOutDuration`) before stopping; 0 stops instantly.
     func pause(_ soundID: UUID, fadeDuration: Double? = nil) {
+        pendingStarts[soundID] = nil
         playingIDs.remove(soundID)
         playedIDs.insert(soundID)
 
@@ -374,13 +450,18 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     /// Sets the channel's gain stage to its sound's loudness-normalization gain, or 0 dB when
-    /// normalization is off. If the background analysis hasn't reached this file yet (e.g. it was
-    /// played right after import), it's analyzed synchronously here instead — a short one-time
-    /// delay is better than the sound starting at one level and audibly jumping to another.
+    /// normalization is off. Never analyzes here — that would block the main thread for as long as
+    /// it takes to decode the whole file. play() waits for the analysis before creating a channel,
+    /// so this only lacks a measurement when normalization is switched on with channels already
+    /// open; those are queued for analysis, and finishAnalysis(of:) applies the gain when done.
     private func applyNormalizationGain(to channel: Channel) {
-        guard normalizeLoudness,
-              let measurement = loudnessCache.measurementAnalyzingIfNeeded(for: channel.fileURL) else {
+        guard normalizeLoudness else {
             channel.gainNode.globalGain = 0
+            return
+        }
+        guard let measurement = loudnessCache.measurement(for: channel.fileURL) else {
+            channel.gainNode.globalGain = 0
+            enqueueAnalysis(of: channel.fileURL)
             return
         }
         channel.gainNode.globalGain = Float(LoudnessAnalyzer.normalizationGain(for: measurement))
@@ -405,6 +486,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     /// Drops cached players so removed/renamed sounds don't hold stale file handles.
     func invalidatePlayer(for soundID: UUID) {
+        pendingStarts[soundID] = nil
         if let channel = channels.removeValue(forKey: soundID) {
             channel.fadeWorkItem?.cancel()
             channel.playerNode.stop()

@@ -5,20 +5,20 @@
             "request": "launch",
             "args": [],
             "cwd": "${workspaceFolder:SoundBoard}",
-            "name": "Debug SoundBoard",
-            "target": "SoundBoard",
+            "name": "Debug Scorely",
+            "target": "Scorely",
             "configuration": "debug",
-            "preLaunchTask": "swift: Build Debug SoundBoard"
+            "preLaunchTask": "swift: Build Debug Scorely"
         },
         {
             "type": "swift",
             "request": "launch",
             "args": [],
             "cwd": "${workspaceFolder:SoundBoard}",
-            "name": "Release SoundBoard",
-            "target": "SoundBoard",
+            "name": "Release Scorely",
+            "target": "Scorely",
             "configuration": "release",
-            "preLaunchTask": "swift: Build Release SoundBoard"
+            "preLaunchTask": "swift: Build Release Scorely"
         }
     ]
 }

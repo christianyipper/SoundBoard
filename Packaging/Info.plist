@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>SoundBoard</string>
+    <string>Scorely</string>
     <key>CFBundleDisplayName</key>
-    <string>SoundBoard</string>
+    <string>Scorely</string>
     <key>CFBundleIdentifier</key>
     <string>com.soundboard.app</string>
     <key>CFBundleVersion</key>
@@ -15,7 +15,7 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>SoundBoard</string>
+    <string>Scorely</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -27,8 +27,8 @@
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
     <key>NSHumanReadableCopyright</key>
-    <string>SoundBoard</string>
+    <string>Scorely</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>SoundBoard uses the microphone to pass your voice through to the speakers when mic passthrough is turned on.</string>
+    <string>Scorely uses the microphone to pass your voice through to the speakers when mic passthrough is turned on.</string>
 </dict>
 </plist>

@@ -1,6 +1,6 @@
 import AVFoundation
 import XCTest
-@testable import SoundBoard
+@testable import Scorely
 
 final class LoudnessAnalyzerTests: XCTestCase {
     private var urls: [URL] = []

@@ -1,6 +1,6 @@
 import Combine
 import XCTest
-@testable import SoundBoard
+@testable import Scorely
 
 final class AudioPlayerManagerTests: XCTestCase {
     private var audioFileURL: URL!
@@ -16,7 +16,7 @@ final class AudioPlayerManagerTests: XCTestCase {
     }
 
     func testPlayMarksSoundAsPlaying() {
-        let manager = AudioPlayerManager()
+        let manager = AudioPlayerManager.withAnalyzedFiles([audioFileURL])
         let sound = Sound(name: "Test", fileName: "test.wav")
 
         manager.play(sound, fileURL: audioFileURL)
@@ -25,7 +25,7 @@ final class AudioPlayerManagerTests: XCTestCase {
     }
 
     func testPauseMarksSoundAsPlayed() {
-        let manager = AudioPlayerManager()
+        let manager = AudioPlayerManager.withAnalyzedFiles([audioFileURL])
         let sound = Sound(name: "Test", fileName: "test.wav")
 
         manager.play(sound, fileURL: audioFileURL)
@@ -35,7 +35,7 @@ final class AudioPlayerManagerTests: XCTestCase {
     }
 
     func testToggleSwitchesBetweenPlayingAndPaused() {
-        let manager = AudioPlayerManager()
+        let manager = AudioPlayerManager.withAnalyzedFiles([audioFileURL])
         let sound = Sound(name: "Test", fileName: "test.wav")
 
         manager.toggle(sound, fileURL: audioFileURL)
@@ -46,7 +46,7 @@ final class AudioPlayerManagerTests: XCTestCase {
     }
 
     func testCrossFadeFallsBackToInstantPauseAndPlayWhenDurationIsZero() {
-        let manager = AudioPlayerManager()
+        let manager = AudioPlayerManager.withAnalyzedFiles([audioFileURL])
         manager.crossFadeDuration = 0
         let soundA = Sound(name: "A", fileName: "a.wav")
         let soundB = Sound(name: "B", fileName: "b.wav")
@@ -59,7 +59,7 @@ final class AudioPlayerManagerTests: XCTestCase {
     }
 
     func testCrossFadeMarksOutgoingPlayedAndIncomingPlaying() {
-        let manager = AudioPlayerManager()
+        let manager = AudioPlayerManager.withAnalyzedFiles([audioFileURL])
         manager.crossFadeDuration = 3
         let soundA = Sound(name: "A", fileName: "a.wav")
         let soundB = Sound(name: "B", fileName: "b.wav")
@@ -72,7 +72,7 @@ final class AudioPlayerManagerTests: XCTestCase {
     }
 
     func testCrossFadeFallsBackWhenOutgoingSoundIsNotPlaying() {
-        let manager = AudioPlayerManager()
+        let manager = AudioPlayerManager.withAnalyzedFiles([audioFileURL])
         manager.crossFadeDuration = 3
         let soundA = Sound(name: "A", fileName: "a.wav")
         let soundB = Sound(name: "B", fileName: "b.wav")
@@ -84,7 +84,7 @@ final class AudioPlayerManagerTests: XCTestCase {
     }
 
     func testDurationReflectsFileLengthOnceOpened() {
-        let manager = AudioPlayerManager()
+        let manager = AudioPlayerManager.withAnalyzedFiles([audioFileURL])
         let sound = Sound(name: "Test", fileName: "test.wav")
 
         XCTAssertNil(manager.duration(for: sound.id), "unplayed sounds have no known duration yet")
@@ -96,7 +96,7 @@ final class AudioPlayerManagerTests: XCTestCase {
     }
 
     func testResetPlayedStatesClearsPlayedButNotPlaying() {
-        let manager = AudioPlayerManager()
+        let manager = AudioPlayerManager.withAnalyzedFiles([audioFileURL])
         let playedSound = Sound(name: "Played", fileName: "a.wav")
         let playingSound = Sound(name: "Playing", fileName: "b.wav")
 
@@ -111,7 +111,7 @@ final class AudioPlayerManagerTests: XCTestCase {
     }
 
     func testNaturalCompletionMarksSoundAsPlayed() throws {
-        let manager = AudioPlayerManager()
+        let manager = AudioPlayerManager.withAnalyzedFiles([audioFileURL])
         let sound = Sound(name: "Short", fileName: "short.wav")
 
         manager.play(sound, fileURL: audioFileURL)
@@ -124,7 +124,7 @@ final class AudioPlayerManagerTests: XCTestCase {
     }
 
     func testPauseThenPlayRestartsFromBeginningRatherThanResuming() throws {
-        let manager = AudioPlayerManager()
+        let manager = AudioPlayerManager.withAnalyzedFiles([audioFileURL])
         let sound = Sound(name: "Long", fileName: "long.wav")
         let longFileURL = TestAudioFixture.makeSilentWAVURL(seconds: 1.0)
         defer { try? FileManager.default.removeItem(at: longFileURL) }
@@ -151,6 +151,42 @@ final class AudioPlayerManagerTests: XCTestCase {
 
         let elapsed = Date().timeIntervalSince(secondPlayStart)
         XCTAssertGreaterThan(elapsed, 0.75, "restarting after a stop should replay the full duration, not just the remaining portion")
+    }
+
+    func testPlayWaitsForLoudnessAnalysisOfUnanalyzedFile() {
+        let manager = AudioPlayerManager()
+        let sound = Sound(name: "Fresh", fileName: "fresh.wav")
+
+        manager.play(sound, fileURL: audioFileURL)
+
+        XCTAssertEqual(manager.state(for: sound.id), .playing, "marked playing right away")
+        XCTAssertNil(manager.duration(for: sound.id), "audio doesn't start until the analysis is done")
+
+        let started = expectation(description: "playback starts once analyzed")
+        func check() {
+            if manager.duration(for: sound.id) != nil { started.fulfill() } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02, execute: check)
+            }
+        }
+        check()
+        wait(for: [started], timeout: 5)
+        XCTAssertEqual(manager.state(for: sound.id), .playing)
+    }
+
+    func testPausingBeforeAnalysisFinishesCancelsTheStart() {
+        let manager = AudioPlayerManager()
+        let sound = Sound(name: "Fresh", fileName: "fresh.wav")
+
+        manager.play(sound, fileURL: audioFileURL)
+        manager.pause(sound.id)
+
+        // Give the analysis time to finish; the cancelled play mustn't start afterwards.
+        let settled = expectation(description: "analysis settled")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { settled.fulfill() }
+        wait(for: [settled], timeout: 2)
+
+        XCTAssertEqual(manager.state(for: sound.id), .played)
+        XCTAssertNil(manager.duration(for: sound.id), "no channel was ever opened")
     }
 
     /// Waits for `soundID` to appear in `manager.playedIDs`, e.g. after natural playback

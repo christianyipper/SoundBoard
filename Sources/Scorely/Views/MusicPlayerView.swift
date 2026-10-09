@@ -9,7 +9,8 @@ import SwiftUI
 /// cueing the next one without playing it. Back/Skip jump to the previous/next track in the play
 /// order, preserving play/pause state: they play immediately if music was already playing, or
 /// just cue the new track (silent) if it was paused. The shuffle button toggles between a
-/// shuffled order and folder order, carrying on from the current track either way.
+/// shuffled order and folder order, carrying on from the current track either way; the button
+/// beside it jumps back to the folder's first track and starts the play order over.
 struct MusicPlayerView: View {
     /// The shared sound library, whose folders the picker offers.
     let playlist: Playlist
@@ -132,8 +133,14 @@ struct MusicPlayerView: View {
                     .help("Next track")
                 }
 
-                HStack {
+                HStack(spacing: 4) {
                     Spacer()
+                    TransportButton(systemImage: "arrow.clockwise", size: 13) {
+                        musicPlayerStore.restartFromFirstTrack()
+                    }
+                    .disabled(musicPlayerStore.currentSound == nil)
+                    .help("Go to the first track and start the play order over")
+
                     TransportButton(
                         systemImage: "shuffle",
                         size: 13,

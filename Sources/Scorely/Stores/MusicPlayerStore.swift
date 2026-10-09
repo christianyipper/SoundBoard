@@ -6,8 +6,9 @@ import Combine
 /// shuffle on — in a shuffled order. Unlike a normal player, pausing doesn't just stop where it is — it also
 /// cues up the next track, so the next play starts a fresh song rather than resuming this one. A
 /// track that finishes on its own behaves the same way: the next track is cued but not started,
-/// so nothing plays until the user hits Play again. The play order is cached per folder so
-/// switching away and back doesn't reshuffle; toggling shuffle off and on again does.
+/// so nothing plays until the user hits Play again. Each folder's play order and position are
+/// kept for the life of the app, so switching away and back picks up on the same track with the
+/// same history; only the refresh button (restartFromFirstTrack()) starts a folder over.
 final class MusicPlayerStore: ObservableObject {
     /// The folder (`SoundTab`) whose sounds are shuffled and played.
     @Published var selectedFolderID: UUID? {
@@ -31,6 +32,8 @@ final class MusicPlayerStore: ObservableObject {
     /// Shuffled play order per folder, cached so switching folders and back doesn't reshuffle.
     /// Only used while `isShuffled`; otherwise the folder's own order is played.
     private var shuffleOrders: [UUID: [UUID]] = [:]
+    /// Each folder's position in its play order, kept across folder switches so returning to a
+    /// folder resumes on the same track.
     private var currentIndices: [UUID: Int] = [:]
     /// When the current track's audio actually started, for computing `elapsedTime`.
     private var trackStartDate: Date?
@@ -148,37 +151,77 @@ final class MusicPlayerStore: ObservableObject {
 
     /// Turns shuffle on or off without interrupting the current track. Turning it on shuffles
     /// the folder with the current track first, so playback carries on from it into a random
-    /// order; turning it off continues from the current track in folder order.
+    /// order; turning it off continues from the current track in folder order. Every other
+    /// visited folder is reordered the same way around its own current track, so it still
+    /// resumes there when switched back to.
     func toggleShuffle() {
+        // Each visited folder's current track under the old ordering, to carry into the new one.
+        let currentTracks = Dictionary(uniqueKeysWithValues: currentIndices.keys.compactMap { folderID in
+            soundID(atCurrentIndexOf: folderID).map { (folderID, $0) }
+        })
         isShuffled.toggle()
-        // Other folders' positions belong to the old ordering; they're re-cued from the start
-        // when next selected anyway.
         shuffleOrders.removeAll()
         currentIndices.removeAll()
+
+        for (folderID, trackID) in currentTracks {
+            let folderOrder = folderSoundIDs(for: folderID)
+            guard folderOrder.contains(trackID) else { continue }
+            if isShuffled {
+                shuffleOrders[folderID] = [trackID] + folderOrder.filter { $0 != trackID }.shuffled()
+                currentIndices[folderID] = 0
+            } else {
+                currentIndices[folderID] = folderOrder.firstIndex(of: trackID)
+            }
+        }
         guard let selectedFolderID else { return }
+        currentIndices[selectedFolderID] = currentIndices[selectedFolderID] ?? 0
+        currentSoundID = soundID(atCurrentIndexOf: selectedFolderID)
+    }
+
+    /// Jumps back to the folder's first sound and starts its play order over: its cached shuffle
+    /// order is discarded (with shuffle on, a fresh one is generated starting from that first
+    /// sound) and its position is reset. Other folders keep their history. Preserves play/pause
+    /// state the same way skipToNext() does.
+    func restartFromFirstTrack() {
+        guard let selectedFolderID else { return }
+        let wasPlaying = isPlaying
+        if isPlaying, let currentSoundID {
+            audioPlayerManager.pause(currentSoundID)
+        }
+        shuffleOrders[selectedFolderID] = nil
 
         let folderOrder = folderSoundIDs(for: selectedFolderID)
-        if isShuffled {
-            if let currentSoundID, folderOrder.contains(currentSoundID) {
-                shuffleOrders[selectedFolderID] = [currentSoundID] + folderOrder.filter { $0 != currentSoundID }.shuffled()
-            }
-            currentIndices[selectedFolderID] = 0
-        } else {
-            currentIndices[selectedFolderID] = currentSoundID.flatMap(folderOrder.firstIndex(of:)) ?? 0
+        if isShuffled, let firstID = folderOrder.first {
+            shuffleOrders[selectedFolderID] = [firstID] + folderOrder.dropFirst().shuffled()
         }
+        currentIndices[selectedFolderID] = 0
         currentSoundID = soundID(atCurrentIndexOf: selectedFolderID)
+        if wasPlaying {
+            play(folderID: selectedFolderID)
+        } else {
+            isPlaying = false
+            trackStartDate = nil
+            elapsedTime = 0
+        }
     }
 
     // MARK: - Private
 
+    /// Stops the current track and cues the newly selected folder where it was left off (the
+    /// same track it was on), or its first track if it hasn't been visited yet.
     private func selectFolder(_ folderID: UUID?) {
-        if isPlaying, let currentSoundID {
-            audioPlayerManager.pause(currentSoundID)
-        }
+        let wasPlaying = isPlaying
+        // Cleared before pausing so the playingIDs sink doesn't read the pause as the track
+        // finishing and advance the new folder's position.
         isPlaying = false
         trackStartDate = nil
         elapsedTime = 0
-        currentSoundID = folderID.flatMap { cueFirstTrack(for: $0) }
+        if wasPlaying, let currentSoundID {
+            audioPlayerManager.pause(currentSoundID)
+        }
+        currentSoundID = folderID.flatMap { folderID in
+            currentIndices[folderID] == nil ? cueFirstTrack(for: folderID) : soundID(atCurrentIndexOf: folderID)
+        }
     }
 
     private func tickElapsedTime() {

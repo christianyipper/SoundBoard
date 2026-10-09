@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
-struct SoundBoardApp: App {
+struct ScorelyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     @StateObject private var playlistStore: PlaylistStore
