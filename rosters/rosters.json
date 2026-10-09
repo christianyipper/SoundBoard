@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-08T16:18:57.485Z",
+  "updatedAt": "2026-10-09T15:59:24.238Z",
   "seasonId": 14553,
   "divisions": [
     {
@@ -904,8 +904,8 @@
               "position": "F",
               "gp": 6,
               "goals": 1,
-              "assists": 4,
-              "points": 5,
+              "assists": 5,
+              "points": 6,
               "pim": 4
             },
             {
@@ -926,8 +926,8 @@
               "position": "F",
               "gp": 6,
               "goals": 1,
-              "assists": 1,
-              "points": 2,
+              "assists": 2,
+              "points": 3,
               "pim": 4
             },
             {
@@ -959,8 +959,8 @@
               "position": "F",
               "gp": 6,
               "goals": 2,
-              "assists": 3,
-              "points": 5,
+              "assists": 1,
+              "points": 3,
               "pim": 0
             },
             {
@@ -970,8 +970,8 @@
               "position": "F",
               "gp": 6,
               "goals": 1,
-              "assists": 2,
-              "points": 3,
+              "assists": 1,
+              "points": 2,
               "pim": 0
             },
             {
@@ -1013,8 +1013,8 @@
               "name": "Austin Russell",
               "position": "F",
               "gp": 6,
-              "goals": 7,
-              "assists": 1,
+              "goals": 6,
+              "assists": 2,
               "points": 8,
               "pim": 16
             },
@@ -1025,8 +1025,8 @@
               "position": "F",
               "gp": 6,
               "goals": 1,
-              "assists": 5,
-              "points": 6,
+              "assists": 4,
+              "points": 5,
               "pim": 0
             },
             {
@@ -1046,9 +1046,9 @@
               "name": "Eric Vaast",
               "position": "D",
               "gp": 6,
-              "goals": 2,
+              "goals": 3,
               "assists": 5,
-              "points": 7,
+              "points": 8,
               "pim": 2
             },
             {
@@ -1080,8 +1080,8 @@
               "position": "F",
               "gp": 6,
               "goals": 0,
-              "assists": 3,
-              "points": 3,
+              "assists": 4,
+              "points": 4,
               "pim": 2
             },
             {
@@ -1131,8 +1131,8 @@
               "position": "D",
               "gp": 6,
               "goals": 0,
-              "assists": 2,
-              "points": 2,
+              "assists": 3,
+              "points": 3,
               "pim": 6
             },
             {
@@ -1142,8 +1142,8 @@
               "position": "F",
               "gp": 6,
               "goals": 1,
-              "assists": 4,
-              "points": 5,
+              "assists": 3,
+              "points": 4,
               "pim": 4
             },
             {
@@ -1153,8 +1153,8 @@
               "position": "F",
               "gp": 6,
               "goals": 2,
-              "assists": 4,
-              "points": 6,
+              "assists": 3,
+              "points": 5,
               "pim": 4
             },
             {
@@ -1186,8 +1186,8 @@
               "position": "D",
               "gp": 6,
               "goals": 3,
-              "assists": 3,
-              "points": 6,
+              "assists": 2,
+              "points": 5,
               "pim": 2
             },
             {
@@ -1197,8 +1197,8 @@
               "position": "F",
               "gp": 6,
               "goals": 3,
-              "assists": 1,
-              "points": 4,
+              "assists": 2,
+              "points": 5,
               "pim": 0
             },
             {
@@ -1219,8 +1219,8 @@
               "position": "D",
               "gp": 6,
               "goals": 0,
-              "assists": 6,
-              "points": 6,
+              "assists": 7,
+              "points": 7,
               "pim": 0
             },
             {
@@ -1230,8 +1230,8 @@
               "position": "D",
               "gp": 6,
               "goals": 1,
-              "assists": 3,
-              "points": 4,
+              "assists": 5,
+              "points": 6,
               "pim": 2
             },
             {
@@ -1241,8 +1241,8 @@
               "position": "F",
               "gp": 6,
               "goals": 5,
-              "assists": 2,
-              "points": 7,
+              "assists": 3,
+              "points": 8,
               "pim": 0
             },
             {
@@ -1263,8 +1263,8 @@
               "position": "F",
               "gp": 6,
               "goals": 1,
-              "assists": 2,
-              "points": 3,
+              "assists": 3,
+              "points": 4,
               "pim": 0
             },
             {
@@ -1274,8 +1274,8 @@
               "position": "",
               "gp": 5,
               "goals": 0,
-              "assists": 0,
-              "points": 0,
+              "assists": 2,
+              "points": 2,
               "pim": 2
             },
             {
@@ -1285,8 +1285,8 @@
               "position": "F",
               "gp": 6,
               "goals": 5,
-              "assists": 6,
-              "points": 11,
+              "assists": 7,
+              "points": 12,
               "pim": 0
             },
             {
@@ -1296,8 +1296,8 @@
               "position": "F",
               "gp": 6,
               "goals": 2,
-              "assists": 6,
-              "points": 8,
+              "assists": 4,
+              "points": 6,
               "pim": 8
             },
             {
@@ -1318,8 +1318,8 @@
               "position": "F",
               "gp": 6,
               "goals": 2,
-              "assists": 1,
-              "points": 3,
+              "assists": 3,
+              "points": 5,
               "pim": 0
             }
           ]
@@ -1596,8 +1596,8 @@
               "position": "F",
               "gp": 6,
               "goals": 2,
-              "assists": 5,
-              "points": 7,
+              "assists": 4,
+              "points": 6,
               "pim": 4
             },
             {
@@ -1629,8 +1629,8 @@
               "position": "F",
               "gp": 6,
               "goals": 4,
-              "assists": 2,
-              "points": 6,
+              "assists": 3,
+              "points": 7,
               "pim": 11
             },
             {
@@ -1640,8 +1640,8 @@
               "position": "F",
               "gp": 6,
               "goals": 0,
-              "assists": 1,
-              "points": 1,
+              "assists": 0,
+              "points": 0,
               "pim": 6
             },
             {
@@ -1706,8 +1706,8 @@
               "position": "F",
               "gp": 6,
               "goals": 5,
-              "assists": 1,
-              "points": 6,
+              "assists": 3,
+              "points": 8,
               "pim": 2
             },
             {
@@ -1772,8 +1772,8 @@
               "position": "D",
               "gp": 6,
               "goals": 0,
-              "assists": 4,
-              "points": 4,
+              "assists": 3,
+              "points": 3,
               "pim": 2
             }
           ]
@@ -2620,6 +2620,17 @@
           "name": "Calgary Rockies",
           "gp": 5,
           "players": [
+            {
+              "id": 5274995,
+              "number": "",
+              "name": "Steven Billeck",
+              "position": "",
+              "gp": 0,
+              "goals": 0,
+              "assists": 0,
+              "points": 0,
+              "pim": 0
+            },
             {
               "id": 5077244,
               "number": "7",
@@ -4881,8 +4892,8 @@
               "position": "F",
               "gp": 6,
               "goals": 1,
-              "assists": 4,
-              "points": 5,
+              "assists": 3,
+              "points": 4,
               "pim": 17
             },
             {
@@ -4914,8 +4925,8 @@
               "position": "D",
               "gp": 5,
               "goals": 0,
-              "assists": 8,
-              "points": 8,
+              "assists": 9,
+              "points": 9,
               "pim": 24
             },
             {
@@ -5714,14 +5725,14 @@
         {
           "id": 398229,
           "name": "Island HC",
-          "gp": 10,
+          "gp": 12,
           "players": [
             {
               "id": 5077107,
               "number": "4",
               "name": "Caleb McFadyen",
               "position": "F",
-              "gp": 9,
+              "gp": 11,
               "goals": 0,
               "assists": 1,
               "points": 1,
@@ -5732,18 +5743,29 @@
               "number": "5",
               "name": "Wyatt Fyfe",
               "position": "F",
-              "gp": 10,
+              "gp": 12,
               "goals": 7,
               "assists": 7,
               "points": 14,
               "pim": 12
             },
             {
+              "id": 5077027,
+              "number": "7",
+              "name": "Casey Bukta",
+              "position": "D",
+              "gp": 12,
+              "goals": 6,
+              "assists": 4,
+              "points": 10,
+              "pim": 44
+            },
+            {
               "id": 5077177,
               "number": "8",
               "name": "Michel Rechon-Reguet",
               "position": "F",
-              "gp": 10,
+              "gp": 12,
               "goals": 3,
               "assists": 3,
               "points": 6,
@@ -5754,7 +5776,7 @@
               "number": "10",
               "name": "Maksim Kostadinov",
               "position": "D",
-              "gp": 10,
+              "gp": 12,
               "goals": 3,
               "assists": 3,
               "points": 6,
@@ -5765,7 +5787,7 @@
               "number": "11",
               "name": "Caden Sugiyama",
               "position": "F",
-              "gp": 10,
+              "gp": 12,
               "goals": 3,
               "assists": 4,
               "points": 7,
@@ -5776,7 +5798,7 @@
               "number": "15",
               "name": "Daxton Murphy",
               "position": "F",
-              "gp": 10,
+              "gp": 12,
               "goals": 1,
               "assists": 1,
               "points": 2,
@@ -5787,7 +5809,7 @@
               "number": "17",
               "name": "Karsa Piros",
               "position": "F",
-              "gp": 10,
+              "gp": 12,
               "goals": 1,
               "assists": 4,
               "points": 5,
@@ -5798,7 +5820,7 @@
               "number": "21",
               "name": "Austin Aydon",
               "position": "F",
-              "gp": 10,
+              "gp": 12,
               "goals": 0,
               "assists": 2,
               "points": 2,
@@ -5809,7 +5831,7 @@
               "number": "22",
               "name": "Gavin Robertshaw",
               "position": "F",
-              "gp": 10,
+              "gp": 12,
               "goals": 5,
               "assists": 5,
               "points": 10,
@@ -5820,7 +5842,7 @@
               "number": "28",
               "name": "Logan Launay",
               "position": "F",
-              "gp": 10,
+              "gp": 12,
               "goals": 1,
               "assists": 1,
               "points": 2,
@@ -5831,7 +5853,7 @@
               "number": "29",
               "name": "Bowen Seeley-Stables",
               "position": "G",
-              "gp": 9,
+              "gp": 11,
               "goals": 0,
               "assists": 0,
               "points": 0,
@@ -5842,29 +5864,18 @@
               "number": "42",
               "name": "Lenny Thurston",
               "position": "D",
-              "gp": 4,
+              "gp": 6,
               "goals": 0,
               "assists": 1,
               "points": 1,
               "pim": 0
             },
             {
-              "id": 5077027,
-              "number": "45",
-              "name": "Casey Bukta",
-              "position": "D",
-              "gp": 10,
-              "goals": 6,
-              "assists": 4,
-              "points": 10,
-              "pim": 44
-            },
-            {
               "id": 5076982,
               "number": "71",
               "name": "Kaleb Ketch",
               "position": "F",
-              "gp": 10,
+              "gp": 12,
               "goals": 1,
               "assists": 0,
               "points": 1,
@@ -5875,7 +5886,7 @@
               "number": "74",
               "name": "Nicholas Burge",
               "position": "G",
-              "gp": 10,
+              "gp": 12,
               "goals": 0,
               "assists": 2,
               "points": 2,
@@ -5886,7 +5897,7 @@
               "number": "76",
               "name": "Rylan Turgeon",
               "position": "D",
-              "gp": 10,
+              "gp": 12,
               "goals": 3,
               "assists": 5,
               "points": 8,
@@ -5897,7 +5908,7 @@
               "number": "80",
               "name": "Austin Chute",
               "position": "F",
-              "gp": 10,
+              "gp": 12,
               "goals": 1,
               "assists": 0,
               "points": 1,
@@ -5908,7 +5919,7 @@
               "number": "90",
               "name": "Leif Price",
               "position": "F",
-              "gp": 10,
+              "gp": 12,
               "goals": 0,
               "assists": 1,
               "points": 1,
@@ -5919,7 +5930,7 @@
               "number": "93",
               "name": "Eli Menard",
               "position": "F",
-              "gp": 10,
+              "gp": 12,
               "goals": 0,
               "assists": 0,
               "points": 0,
@@ -6126,8 +6137,8 @@
               "position": "F",
               "gp": 7,
               "goals": 1,
-              "assists": 3,
-              "points": 4,
+              "assists": 4,
+              "points": 5,
               "pim": 6
             },
             {
@@ -6210,8 +6221,8 @@
               "position": "F",
               "gp": 10,
               "goals": 4,
-              "assists": 8,
-              "points": 12,
+              "assists": 7,
+              "points": 11,
               "pim": 12
             },
             {
@@ -6375,8 +6386,8 @@
               "position": "F",
               "gp": 10,
               "goals": 9,
-              "assists": 3,
-              "points": 12,
+              "assists": 4,
+              "points": 13,
               "pim": 2
             }
           ]
@@ -6664,8 +6675,8 @@
               "position": "D",
               "gp": 10,
               "goals": 0,
-              "assists": 6,
-              "points": 6,
+              "assists": 7,
+              "points": 7,
               "pim": 8
             },
             {
@@ -6774,8 +6785,8 @@
               "position": "",
               "gp": 9,
               "goals": 11,
-              "assists": 7,
-              "points": 18,
+              "assists": 6,
+              "points": 17,
               "pim": 12
             },
             {
@@ -6796,8 +6807,8 @@
               "position": "F",
               "gp": 10,
               "goals": 6,
-              "assists": 11,
-              "points": 17,
+              "assists": 10,
+              "points": 16,
               "pim": 16
             },
             {
@@ -7323,8 +7334,8 @@
               "position": "D",
               "gp": 7,
               "goals": 1,
-              "assists": 3,
-              "points": 4,
+              "assists": 2,
+              "points": 3,
               "pim": 30
             },
             {
@@ -7891,7 +7902,7 @@
         {
           "id": 398239,
           "name": "Calgary Stallions",
-          "gp": 7,
+          "gp": 8,
           "players": [
             {
               "id": 5076774,
@@ -7905,22 +7916,11 @@
               "pim": 0
             },
             {
-              "id": 5260423,
-              "number": "",
-              "name": "Nickalaus Jones",
-              "position": "",
-              "gp": 0,
-              "goals": 0,
-              "assists": 0,
-              "points": 0,
-              "pim": 0
-            },
-            {
               "id": 5076792,
               "number": "1",
               "name": "Owen West",
               "position": "G",
-              "gp": 7,
+              "gp": 8,
               "goals": 0,
               "assists": 0,
               "points": 0,
@@ -7931,7 +7931,7 @@
               "number": "2",
               "name": "Porter Barrington (AP)",
               "position": "F",
-              "gp": 7,
+              "gp": 8,
               "goals": 0,
               "assists": 0,
               "points": 0,
@@ -7942,7 +7942,7 @@
               "number": "3",
               "name": "Tony Onespot",
               "position": "",
-              "gp": 4,
+              "gp": 5,
               "goals": 0,
               "assists": 0,
               "points": 0,
@@ -7953,18 +7953,29 @@
               "number": "4",
               "name": "Devon Jolleys",
               "position": "D",
-              "gp": 7,
+              "gp": 8,
               "goals": 0,
               "assists": 4,
               "points": 4,
               "pim": 10
             },
             {
+              "id": 5260423,
+              "number": "6",
+              "name": "Nickalaus Jones",
+              "position": "",
+              "gp": 1,
+              "goals": 0,
+              "assists": 0,
+              "points": 0,
+              "pim": 0
+            },
+            {
               "id": 5076802,
               "number": "8",
               "name": "Kyson Trinh",
               "position": "F",
-              "gp": 6,
+              "gp": 7,
               "goals": 0,
               "assists": 1,
               "points": 1,
@@ -7975,7 +7986,7 @@
               "number": "10",
               "name": "Sean Morin",
               "position": "F",
-              "gp": 7,
+              "gp": 8,
               "goals": 1,
               "assists": 0,
               "points": 1,
@@ -7986,7 +7997,7 @@
               "number": "11",
               "name": "Lucas Derdall",
               "position": "D",
-              "gp": 7,
+              "gp": 8,
               "goals": 0,
               "assists": 4,
               "points": 4,
@@ -7997,7 +8008,7 @@
               "number": "14",
               "name": "Sebastien Pyke",
               "position": "F",
-              "gp": 7,
+              "gp": 8,
               "goals": 1,
               "assists": 2,
               "points": 3,
@@ -8008,7 +8019,7 @@
               "number": "15",
               "name": "Greg Milne",
               "position": "F",
-              "gp": 7,
+              "gp": 8,
               "goals": 3,
               "assists": 0,
               "points": 3,
@@ -8041,7 +8052,7 @@
               "number": "19",
               "name": "Leo Facca",
               "position": "",
-              "gp": 4,
+              "gp": 5,
               "goals": 1,
               "assists": 0,
               "points": 1,
@@ -8052,7 +8063,7 @@
               "number": "20",
               "name": "Brendan Nevins-Layte",
               "position": "D",
-              "gp": 7,
+              "gp": 8,
               "goals": 0,
               "assists": 0,
               "points": 0,
@@ -8063,7 +8074,18 @@
               "number": "31",
               "name": "Matthew Tucker",
               "position": "G",
-              "gp": 7,
+              "gp": 8,
+              "goals": 0,
+              "assists": 0,
+              "points": 0,
+              "pim": 0
+            },
+            {
+              "id": 5274948,
+              "number": "71",
+              "name": "Charlie Rowe",
+              "position": "",
+              "gp": 1,
               "goals": 0,
               "assists": 0,
               "points": 0,
@@ -8074,7 +8096,7 @@
               "number": "76",
               "name": "Colton Shedden",
               "position": "D",
-              "gp": 7,
+              "gp": 8,
               "goals": 0,
               "assists": 1,
               "points": 1,
@@ -8085,7 +8107,7 @@
               "number": "77",
               "name": "Kage Grenkow",
               "position": "F",
-              "gp": 7,
+              "gp": 8,
               "goals": 3,
               "assists": 2,
               "points": 5,
@@ -8096,7 +8118,7 @@
         {
           "id": 398240,
           "name": "Coquitlam HC",
-          "gp": 8,
+          "gp": 9,
           "players": [
             {
               "id": 5077467,
@@ -8114,7 +8136,7 @@
               "number": "2",
               "name": "Simon Gvozdev",
               "position": "D",
-              "gp": 8,
+              "gp": 9,
               "goals": 0,
               "assists": 5,
               "points": 5,
@@ -8125,7 +8147,7 @@
               "number": "3",
               "name": "Greyson Howse",
               "position": "D",
-              "gp": 8,
+              "gp": 9,
               "goals": 0,
               "assists": 2,
               "points": 2,
@@ -8136,7 +8158,7 @@
               "number": "4",
               "name": "Luca Misceo",
               "position": "D",
-              "gp": 6,
+              "gp": 7,
               "goals": 2,
               "assists": 2,
               "points": 4,
@@ -8147,7 +8169,7 @@
               "number": "8",
               "name": "Ashwin Manhas",
               "position": "D",
-              "gp": 8,
+              "gp": 9,
               "goals": 0,
               "assists": 1,
               "points": 1,
@@ -8158,7 +8180,7 @@
               "number": "9",
               "name": "Austin Pavan",
               "position": "F",
-              "gp": 8,
+              "gp": 9,
               "goals": 9,
               "assists": 10,
               "points": 19,
@@ -8169,7 +8191,7 @@
               "number": "10",
               "name": "Ethan Caputo",
               "position": "F",
-              "gp": 8,
+              "gp": 9,
               "goals": 1,
               "assists": 5,
               "points": 6,
@@ -8191,7 +8213,7 @@
               "number": "14",
               "name": "Theron Lashley",
               "position": "F",
-              "gp": 8,
+              "gp": 9,
               "goals": 0,
               "assists": 1,
               "points": 1,
@@ -8202,7 +8224,7 @@
               "number": "17",
               "name": "Riley Horne",
               "position": "D",
-              "gp": 8,
+              "gp": 9,
               "goals": 0,
               "assists": 1,
               "points": 1,
@@ -8213,7 +8235,7 @@
               "number": "20",
               "name": "Mason McWhirter",
               "position": "F",
-              "gp": 8,
+              "gp": 9,
               "goals": 3,
               "assists": 4,
               "points": 7,
@@ -8224,7 +8246,7 @@
               "number": "22",
               "name": "Danwoo Kim",
               "position": "F",
-              "gp": 8,
+              "gp": 9,
               "goals": 7,
               "assists": 1,
               "points": 8,
@@ -8235,7 +8257,7 @@
               "number": "26",
               "name": "Keenen Canales",
               "position": "F",
-              "gp": 8,
+              "gp": 9,
               "goals": 8,
               "assists": 10,
               "points": 18,
@@ -8246,7 +8268,7 @@
               "number": "27",
               "name": "Seajay Loreti",
               "position": "F",
-              "gp": 8,
+              "gp": 9,
               "goals": 0,
               "assists": 3,
               "points": 3,
@@ -8257,7 +8279,7 @@
               "number": "31",
               "name": "Joel Paladino",
               "position": "G",
-              "gp": 7,
+              "gp": 8,
               "goals": 0,
               "assists": 0,
               "points": 0,
@@ -8268,7 +8290,7 @@
               "number": "34",
               "name": "Dominic Allegretto",
               "position": "F",
-              "gp": 8,
+              "gp": 9,
               "goals": 4,
               "assists": 7,
               "points": 11,
@@ -8279,7 +8301,7 @@
               "number": "35",
               "name": "Malcolm Katuski",
               "position": "",
-              "gp": 4,
+              "gp": 5,
               "goals": 0,
               "assists": 0,
               "points": 0,
@@ -8290,7 +8312,7 @@
               "number": "74",
               "name": "Christiano D’Addabbo",
               "position": "F",
-              "gp": 8,
+              "gp": 9,
               "goals": 9,
               "assists": 11,
               "points": 20,
@@ -8301,7 +8323,7 @@
               "number": "77",
               "name": "Markus Halliwell",
               "position": "F",
-              "gp": 8,
+              "gp": 9,
               "goals": 5,
               "assists": 11,
               "points": 16,
@@ -8312,7 +8334,7 @@
               "number": "80",
               "name": "Timur Kolakov",
               "position": "D",
-              "gp": 8,
+              "gp": 9,
               "goals": 1,
               "assists": 1,
               "points": 2,
@@ -8323,7 +8345,7 @@
               "number": "91",
               "name": "Charlie Pena",
               "position": "F",
-              "gp": 2,
+              "gp": 3,
               "goals": 1,
               "assists": 0,
               "points": 1,
@@ -8941,6 +8963,17 @@
           "gp": 6,
           "players": [
             {
+              "id": 5277080,
+              "number": "",
+              "name": "Knox Turner",
+              "position": "",
+              "gp": 0,
+              "goals": 0,
+              "assists": 0,
+              "points": 0,
+              "pim": 0
+            },
+            {
               "id": 5263268,
               "number": "",
               "name": "Liam Roberts",
@@ -9348,14 +9381,14 @@
         {
           "id": 398246,
           "name": "Lethbridge United",
-          "gp": 6,
+          "gp": 7,
           "players": [
             {
               "id": 5076942,
               "number": "1",
               "name": "Lucas Pasemko",
               "position": "G",
-              "gp": 6,
+              "gp": 7,
               "goals": 0,
               "assists": 0,
               "points": 0,
@@ -9366,7 +9399,7 @@
               "number": "2",
               "name": "William Keraiff",
               "position": "D",
-              "gp": 3,
+              "gp": 4,
               "goals": 1,
               "assists": 1,
               "points": 2,
@@ -9377,7 +9410,7 @@
               "number": "7",
               "name": "Benson Wirun",
               "position": "D",
-              "gp": 5,
+              "gp": 6,
               "goals": 0,
               "assists": 1,
               "points": 1,
@@ -9388,10 +9421,10 @@
               "number": "9",
               "name": "Carter Jensen",
               "position": "D",
-              "gp": 6,
+              "gp": 7,
               "goals": 3,
-              "assists": 5,
-              "points": 8,
+              "assists": 6,
+              "points": 9,
               "pim": 8
             },
             {
@@ -9410,10 +9443,10 @@
               "number": "11",
               "name": "Reid Brown",
               "position": "F",
-              "gp": 5,
+              "gp": 6,
               "goals": 0,
-              "assists": 0,
-              "points": 0,
+              "assists": 1,
+              "points": 1,
               "pim": 6
             },
             {
@@ -9421,7 +9454,7 @@
               "number": "13",
               "name": "Nolan Sass",
               "position": "F",
-              "gp": 6,
+              "gp": 7,
               "goals": 0,
               "assists": 0,
               "points": 0,
@@ -9443,7 +9476,7 @@
               "number": "16",
               "name": "Ryder Hagel",
               "position": "F",
-              "gp": 6,
+              "gp": 7,
               "goals": 3,
               "assists": 2,
               "points": 5,
@@ -9454,7 +9487,7 @@
               "number": "17",
               "name": "Reed Palmarchuk",
               "position": "F",
-              "gp": 6,
+              "gp": 7,
               "goals": 2,
               "assists": 0,
               "points": 2,
@@ -9465,7 +9498,7 @@
               "number": "18",
               "name": "Luke Zienchuk",
               "position": "F",
-              "gp": 5,
+              "gp": 6,
               "goals": 4,
               "assists": 2,
               "points": 6,
@@ -9476,7 +9509,7 @@
               "number": "19",
               "name": "Krish Khullar",
               "position": "F",
-              "gp": 6,
+              "gp": 7,
               "goals": 4,
               "assists": 3,
               "points": 7,
@@ -9487,10 +9520,10 @@
               "number": "21",
               "name": "Maxim Hunchuk",
               "position": "F",
-              "gp": 6,
+              "gp": 7,
               "goals": 2,
-              "assists": 1,
-              "points": 3,
+              "assists": 0,
+              "points": 2,
               "pim": 6
             },
             {
@@ -9498,7 +9531,7 @@
               "number": "25",
               "name": "Bentley McMaster",
               "position": "D",
-              "gp": 6,
+              "gp": 7,
               "goals": 1,
               "assists": 0,
               "points": 1,
@@ -9509,7 +9542,7 @@
               "number": "27",
               "name": "Pearson Sokoloski",
               "position": "F",
-              "gp": 6,
+              "gp": 7,
               "goals": 4,
               "assists": 2,
               "points": 6,
@@ -9520,7 +9553,7 @@
               "number": "29",
               "name": "Rowan Miller",
               "position": "G",
-              "gp": 6,
+              "gp": 7,
               "goals": 0,
               "assists": 0,
               "points": 0,
@@ -9531,7 +9564,7 @@
               "number": "44",
               "name": "Radim Javurek",
               "position": "D",
-              "gp": 6,
+              "gp": 7,
               "goals": 0,
               "assists": 7,
               "points": 7,
@@ -9542,10 +9575,10 @@
               "number": "92",
               "name": "Maxim Vaneev",
               "position": "F",
-              "gp": 6,
+              "gp": 7,
               "goals": 1,
-              "assists": 9,
-              "points": 10,
+              "assists": 8,
+              "points": 9,
               "pim": 0
             }
           ]
@@ -10365,17 +10398,6 @@
           "gp": 10,
           "players": [
             {
-              "id": 5254833,
-              "number": "",
-              "name": "Jake Myhre",
-              "position": "",
-              "gp": 0,
-              "goals": 0,
-              "assists": 0,
-              "points": 0,
-              "pim": 0
-            },
-            {
               "id": 5094856,
               "number": "1",
               "name": "Wade Burton",
@@ -10517,6 +10539,17 @@
               "assists": 5,
               "points": 7,
               "pim": 32
+            },
+            {
+              "id": 5254833,
+              "number": "19",
+              "name": "Jake Myhre",
+              "position": "F",
+              "gp": 0,
+              "goals": 0,
+              "assists": 0,
+              "points": 0,
+              "pim": 0
             },
             {
               "id": 5089371,
@@ -10836,8 +10869,8 @@
               "position": "D",
               "gp": 9,
               "goals": 2,
-              "assists": 4,
-              "points": 6,
+              "assists": 3,
+              "points": 5,
               "pim": 14
             },
             {
@@ -10858,8 +10891,8 @@
               "position": "D",
               "gp": 9,
               "goals": 0,
-              "assists": 2,
-              "points": 2,
+              "assists": 1,
+              "points": 1,
               "pim": 4
             },
             {
@@ -11001,8 +11034,8 @@
               "position": "F",
               "gp": 9,
               "goals": 1,
-              "assists": 1,
-              "points": 2,
+              "assists": 0,
+              "points": 1,
               "pim": 24
             },
             {
@@ -11023,8 +11056,8 @@
               "position": "D",
               "gp": 9,
               "goals": 0,
-              "assists": 3,
-              "points": 3,
+              "assists": 4,
+              "points": 4,
               "pim": 2
             },
             {
@@ -11034,8 +11067,8 @@
               "position": "",
               "gp": 5,
               "goals": 0,
-              "assists": 1,
-              "points": 1,
+              "assists": 0,
+              "points": 0,
               "pim": 4
             },
             {
