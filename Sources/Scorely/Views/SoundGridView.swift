@@ -88,6 +88,10 @@ struct SoundGridView: View {
                                     navigate(to: folder.id)
                                 } onDelete: {
                                     deleteFolder(folder.id)
+                                } onMove: { draggedID in
+                                    withAnimation(DesignSystem.Motion.springSmooth) {
+                                        playlistStore.moveTab(draggedID, to: folder.id, in: playlist.id)
+                                    }
                                 }
                             }
                             ForEach(currentFolder.sounds) { sound in
@@ -417,11 +421,15 @@ private struct ExplorerPathBar: View {
 
 /// A folder tile shown at the top of the root folder's grid, in the same square format as
 /// SoundTileView, so folders and sounds read as one consistent file listing. Clicking it
-/// navigates forward into that folder.
+/// navigates forward into that folder. Click-and-drag one folder onto another to reorder them.
 private struct FolderTileView: View {
     let folder: SoundTab
     let onOpen: () -> Void
     let onDelete: () -> Void
+    /// Called with the dragged folder's id when another folder is dropped onto this one.
+    let onMove: (_ draggedID: UUID) -> Void
+
+    @State private var isDropTargeted = false
 
     var body: some View {
         Button(action: onOpen) {
@@ -449,9 +457,30 @@ private struct FolderTileView: View {
         }
         .buttonStyle(.plain)
         .glassCard(cornerRadius: DesignSystem.Radius.medium, tint: DesignSystem.Colors.accentPrimary)
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: DesignSystem.Radius.medium, style: .continuous)
+                    .strokeBorder(DesignSystem.Colors.accentPrimary, lineWidth: 2)
+            }
+        }
         .pointerCursor()
         .contextMenu {
             Button("Delete", role: .destructive, action: onDelete)
+        }
+        .onDrag {
+            NSItemProvider(object: folder.id.uuidString as NSString)
+        }
+        // Sound tiles drag their ids as text too; PlaylistStore.moveTab ignores any id that isn't
+        // one of the playlist's folders, so dropping a sound here is a harmless no-op.
+        .onDrop(of: [.text], isTargeted: $isDropTargeted) { providers in
+            guard let provider = providers.first else { return false }
+            _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                guard let string = object as? String, let draggedID = UUID(uuidString: string) else { return }
+                DispatchQueue.main.async {
+                    onMove(draggedID)
+                }
+            }
+            return true
         }
     }
 }

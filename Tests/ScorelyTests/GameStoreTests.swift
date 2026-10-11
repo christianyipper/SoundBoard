@@ -30,6 +30,43 @@ final class GameStoreTests: XCTestCase {
         XCTAssertEqual(store.stampedTime, "00:00")
     }
 
+    func testCountdownAddsTimeAndTicksToZero() {
+        let store = GameStore(baseDirectory: tempDirectory)
+
+        store.setPeriodTimeText("045")
+        store.addClockTime(seconds: 30)
+        XCTAssertEqual(store.periodTimeText, "1:15")
+        XCTAssertEqual(store.clockState, .running)
+
+        store.addClockTime(seconds: 60)
+        XCTAssertEqual(store.periodTimeText, "2:15")
+
+        store.setPeriodTimeText("001")
+        store.addClockTime(seconds: 0)
+        store.tickClock()
+        XCTAssertEqual(store.stampedTime, "00:00")
+        XCTAssertEqual(store.clockState, .stopped, "the countdown stops at zero")
+    }
+
+    func testEditingPausesCountdownAndTypingStopsIt() {
+        let store = GameStore(baseDirectory: tempDirectory)
+
+        store.addClockTime(seconds: 30)
+        store.pauseClock()
+        XCTAssertEqual(store.clockState, .paused)
+        store.setPeriodTimeText("0:30")
+        XCTAssertEqual(store.clockState, .paused, "the same time (e.g. select-all) doesn't stop it")
+        store.resumeClock()
+        XCTAssertEqual(store.clockState, .running)
+
+        store.pauseClock()
+        store.setPeriodTimeText("1200")
+        XCTAssertEqual(store.clockState, .stopped)
+        store.resumeClock()
+        XCTAssertEqual(store.clockState, .stopped, "a typed time doesn't resume the countdown")
+        XCTAssertEqual(store.periodTimeText, "12:00")
+    }
+
     func testJerseyNumbersKeepAtMostTwoDigits() {
         XCTAssertEqual(JerseyNumber.sanitized("1a23"), "12")
         XCTAssertEqual(JerseyNumber.sanitized("v"), "")
@@ -85,37 +122,38 @@ final class GameStoreTests: XCTestCase {
     func testSubmitPenaltiesRecordsOnlyCompleteRows() {
         let store = GameStore(baseDirectory: tempDirectory)
         store.updatePenaltyRow(side: .home, index: 0) {
-            $0.infraction = .tripping
+            $0.infractions = [.tripping]
             $0.types.toggle(.minor)
             $0.types.toggle(.gameMisconduct)
             $0.playerNumber = "45"
             $0.servedBy = "12"
         }
-        store.updatePenaltyRow(side: .home, index: 1) { $0.infraction = .hooking }
+        store.updatePenaltyRow(side: .home, index: 1) { $0.infractions = [.hooking] }
 
         store.submitPenalties(for: .home)
 
         XCTAssertEqual(store.game.penalties.map(\.summary), ["Tripping: Minor + GM #45 (Served by #12)"])
         XCTAssertEqual(store.penaltyRows(for: .home)[0], PenaltyDraftRow())
-        XCTAssertEqual(store.penaltyRows(for: .home)[1].infraction, .hooking, "incomplete rows are kept")
+        XCTAssertEqual(store.penaltyRows(for: .home)[1].infractions, [.hooking], "incomplete rows are kept")
     }
 
     func testPickerButtonsFillTheSelectedPenaltyRow() {
         let store = GameStore(baseDirectory: tempDirectory)
         let row = PenaltyRowID(side: .away, index: 1)
 
-        store.setInfraction(.tripping)
+        store.toggleInfraction(.tripping)
         XCTAssertEqual(store.penaltyRows(for: .away)[1], PenaltyDraftRow(), "buttons do nothing with no row selected")
 
         store.selectPenaltyRow(row)
-        store.setInfraction(.tripping)
+        store.toggleInfraction(.tripping)
+        store.toggleInfraction(.roughing)
         store.togglePenaltyType(.minor)
         store.togglePenaltyType(.gameMisconduct)
-        XCTAssertEqual(store.activePenaltyDraft?.infraction, .tripping)
+        XCTAssertEqual(store.activePenaltyDraft?.infractions, [.tripping, .roughing])
         XCTAssertEqual(store.activePenaltyDraft?.types, [.minor, .gameMisconduct])
 
-        store.setInfraction(.tripping)
-        XCTAssertNil(store.activePenaltyDraft?.infraction, "picking the selected infraction again clears it")
+        store.toggleInfraction(.tripping)
+        XCTAssertEqual(store.activePenaltyDraft?.infractions, [.roughing], "picking a selected infraction again removes it")
 
         store.selectPenaltyRow(row)
         XCTAssertNil(store.activePenaltyRow, "clicking the selected row again deselects it")
@@ -124,7 +162,7 @@ final class GameStoreTests: XCTestCase {
     func testSubmittingPenaltiesDeselectsThatSidesRow() {
         let store = GameStore(baseDirectory: tempDirectory)
         store.selectPenaltyRow(PenaltyRowID(side: .home, index: 0))
-        store.setInfraction(.hooking)
+        store.toggleInfraction(.hooking)
         store.togglePenaltyType(.minor)
         store.updatePenaltyRow(side: .home, index: 0) { $0.playerNumber = "9" }
 
@@ -134,12 +172,21 @@ final class GameStoreTests: XCTestCase {
         XCTAssertEqual(store.game.penalties.count, 1)
     }
 
-    func testPenaltyTypesAreSingleSelectPerGroup() {
+    func testPenaltyTypesCombineFreely() {
         var types: Set<PenaltyType> = []
+        types.toggle(.misc)
         types.toggle(.minor)
         types.toggle(.major)
-        types.toggle(.misc)
+        types.toggle(.minor)
         XCTAssertEqual(types.ordered, [.major, .misc])
+    }
+
+    func testPenaltySavedWithSingleInfractionStillLoads() throws {
+        let json = """
+        {"id":"\(UUID().uuidString)","team":"home","period":1,"time":"05:00","infraction":"tripping","types":["minor"],"playerNumber":"9","recordedAt":0}
+        """
+        let penalty = try JSONDecoder().decode(PenaltyEntry.self, from: Data(json.utf8))
+        XCTAssertEqual(penalty.infractions, [.tripping])
     }
 
     func testRosterTeamNamesSideAndLooksUpPlayers() {

@@ -39,10 +39,13 @@ final class GameStore: ObservableObject {
     /// The penalty row the infraction/type buttons apply to. While set, the opposite side's
     /// column shows those buttons in place of its penalty rows.
     @Published var activePenaltyRow: PenaltyRowID?
+    /// Whether the clock is counting down after a +30s/+60s press.
+    @Published private(set) var clockState: ClockState = .stopped
 
     private let fileURL: URL
     private let savesURL: URL
     private var saveWorkItem: DispatchWorkItem?
+    private var clockTimer: Timer?
 
     private struct SavesFile: Codable {
         var saves: [SavedGame]
@@ -162,8 +165,84 @@ final class GameStore: ObservableObject {
     }
 
     /// Keeps only the first four digits of whatever was typed (so "12:45" and "1245" both work).
+    /// Typing a new time stops the countdown.
     func setPeriodTimeText(_ text: String) {
-        game.periodTimeDigits = Self.clockDigits(from: text)
+        let digits = Self.clockDigits(from: text)
+        guard digits != game.periodTimeDigits else { return }
+        stopClock()
+        game.periodTimeDigits = digits
+    }
+
+    // MARK: - Countdown
+
+    enum ClockState {
+        case stopped
+        case running
+        /// Held while the time field is being edited; resumes when editing ends.
+        case paused
+    }
+
+    /// The most the four-digit time field holds (99:59).
+    static let maxClockSeconds = 99 * 60 + 59
+
+    /// The time field's value in seconds ("1245" → 765).
+    var clockSeconds: Int {
+        let value = Int(game.periodTimeDigits) ?? 0
+        return value / 100 * 60 + value % 100
+    }
+
+    /// Adds `seconds` to the time and counts it down to 0:00, once a second.
+    func addClockTime(seconds: Int) {
+        setClockSeconds(min(clockSeconds + seconds, Self.maxClockSeconds))
+        startClockTimer()
+    }
+
+    /// Holds a running countdown (while the time field is being edited).
+    func pauseClock() {
+        guard clockState == .running else { return }
+        invalidateClockTimer()
+        clockState = .paused
+    }
+
+    /// Picks a paused countdown back up.
+    func resumeClock() {
+        guard clockState == .paused else { return }
+        startClockTimer()
+    }
+
+    func stopClock() {
+        invalidateClockTimer()
+        clockState = .stopped
+    }
+
+    /// One second off the countdown; stops at 0:00.
+    func tickClock() {
+        let remaining = max(0, clockSeconds - 1)
+        setClockSeconds(remaining)
+        if remaining == 0 { stopClock() }
+    }
+
+    private func setClockSeconds(_ seconds: Int) {
+        let seconds = max(0, seconds)
+        game.periodTimeDigits = "\(seconds / 60)" + String(format: "%02d", seconds % 60)
+    }
+
+    private func startClockTimer() {
+        invalidateClockTimer()
+        guard clockSeconds > 0 else {
+            clockState = .stopped
+            return
+        }
+        clockState = .running
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.tickClock() }
+        // Common modes so it keeps ticking while a menu or scroll is tracking.
+        RunLoop.main.add(timer, forMode: .common)
+        clockTimer = timer
+    }
+
+    private func invalidateClockTimer() {
+        clockTimer?.invalidate()
+        clockTimer = nil
     }
 
     static func clockText(fromDigits digits: String) -> String {
@@ -293,11 +372,15 @@ final class GameStore: ObservableObject {
         activePenaltyRow = activePenaltyRow == row ? nil : row
     }
 
-    /// Picking the active row's current infraction again clears it.
-    func setInfraction(_ infraction: Infraction) {
+    /// Adds `infraction` to the active row, or removes it if it's already there.
+    func toggleInfraction(_ infraction: Infraction) {
         guard let row = activePenaltyRow else { return }
         updatePenaltyRow(side: row.side, index: row.index) {
-            $0.infraction = $0.infraction == infraction ? nil : infraction
+            if let index = $0.infractions.firstIndex(of: infraction) {
+                $0.infractions.remove(at: index)
+            } else {
+                $0.infractions.append(infraction)
+            }
         }
     }
 
@@ -320,12 +403,11 @@ final class GameStore: ObservableObject {
         var rows = penaltyRows(for: side)
         for index in rows.indices where rows[index].isComplete {
             let row = rows[index]
-            guard let infraction = row.infraction else { continue }
             game.penalties.append(PenaltyEntry(
                 team: side,
                 period: game.currentPeriod,
                 time: stampedTime,
-                infraction: infraction,
+                infractions: row.infractions,
                 types: row.types.ordered,
                 playerNumber: row.playerNumber,
                 servedBy: row.servedBy.isEmpty ? nil : row.servedBy
@@ -360,6 +442,7 @@ final class GameStore: ObservableObject {
 
     /// Replaces the live game, clearing any half-typed goal/penalty inputs.
     private func resetLiveGame(to newGame: Game) {
+        stopClock()
         game = newGame
         goalDrafts = [:]
         goalStrengths = [:]

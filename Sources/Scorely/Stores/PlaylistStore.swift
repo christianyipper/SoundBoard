@@ -87,6 +87,20 @@ final class PlaylistStore: ObservableObject {
         scheduleSave()
     }
 
+    /// Moves a folder (tab) into `targetID`'s position, shifting the folders in between over by
+    /// one — so dragging onto a later folder lands after it, onto an earlier one lands before it.
+    /// The root tab always stays first: it can't be moved, and nothing can be moved in front of it.
+    func moveTab(_ draggedID: UUID, to targetID: UUID, in playlistID: UUID) {
+        guard draggedID != targetID,
+              let playlistIndex = playlists.firstIndex(where: { $0.id == playlistID }),
+              let fromIndex = playlists[playlistIndex].tabs.firstIndex(where: { $0.id == draggedID }),
+              let toIndex = playlists[playlistIndex].tabs.firstIndex(where: { $0.id == targetID }),
+              fromIndex > 0, toIndex > 0 else { return }
+        let tab = playlists[playlistIndex].tabs.remove(at: fromIndex)
+        playlists[playlistIndex].tabs.insert(tab, at: toIndex)
+        scheduleSave()
+    }
+
     // MARK: - Sounds
 
     /// Copies each source file into the Sounds directory and appends a new Sound to the given

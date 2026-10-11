@@ -187,6 +187,35 @@ final class ShortcutManagerTests: XCTestCase {
         XCTAssertEqual(audioManager.state(for: sound.id), .playing)
     }
 
+    func testSpacebarPausesHotkeySoundWithoutTogglingMusicPlayer() throws {
+        let store = PlaylistStore(baseDirectory: tempDirectory)
+        let playlist = store.library
+        let sourceURL = tempDirectory.appendingPathComponent("a.wav")
+        try TestAudioFixture.makeSilentWAVData().write(to: sourceURL)
+        let sound = try store.importSounds(from: [sourceURL], into: playlist.id).first!
+
+        let audioManager = AudioPlayerManager()
+        let musicPlayerStore = MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager)
+        musicPlayerStore.selectedFolderID = playlist.tabs[0].id
+        let manager = ShortcutManager(
+            playlistStore: store,
+            audioPlayerManager: audioManager,
+            hotkeyBarStore: HotkeyBarStore(baseDirectory: tempDirectory),
+            microphoneManager: MicrophoneManager(),
+            musicPlayerStore: musicPlayerStore,
+            settingsStore: SettingsStore(baseDirectory: tempDirectory),
+            gameStore: GameStore(baseDirectory: tempDirectory)
+        )
+        audioManager.play(sound, fileURL: store.url(for: sound))
+
+        let event = try XCTUnwrap(Self.keyEvent(keyCode: 49, modifierFlags: [])) // spacebar
+        let result = manager.handle(event)
+
+        XCTAssertNil(result, "spacebar presses should be consumed")
+        XCTAssertNotEqual(audioManager.state(for: sound.id), .playing)
+        XCTAssertFalse(musicPlayerStore.isPlaying, "the music player shouldn't start")
+    }
+
     /// The hotkey preset follows the main view (Call → Goal Call), so arrow keys never switch it.
     func testArrowKeysPassThroughWithoutSwitchingPresets() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)

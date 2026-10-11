@@ -2,14 +2,16 @@ import AppKit
 import Combine
 
 /// Installs local key-down and key-up monitors for the app's lifetime. On key-down it checks the
-/// spacebar (music player play/pause) first, then the fixed "V" mic hotkey, then the fixed
+/// spacebar first (pauses any hotkey sound that's playing, otherwise plays/pauses the music
+/// player), then the fixed "V" mic hotkey, then the fixed
 /// gamesheet shot keys (set in Settings; A/Z home +/-, D/C away +/- by default), then the selected hotkey preset's slots (plain keys 1-9/0), then every sound's custom assigned shortcut,
 /// toggling play/pause on a match. The mic hotkey's behavior depends on
 /// `settings.microphoneHotkeyMode`: "toggle" flips it on key-down; "push to talk" turns it on
 /// while V is held and off on key-up (handled by the key-up monitor). While `beginRecording` is
 /// active, the next key-down is instead captured and handed back to the caller (used by the
-/// "assign shortcut" UI), rather than triggering playback. Key-downs are ignored while a text
-/// field is being edited, so typing into a rename/name dialog never accidentally triggers a sound.
+/// "assign shortcut" UI), rather than triggering playback. Every key-down except the spacebar is
+/// ignored while a text field is being edited, so typing into a rename/name dialog never
+/// accidentally triggers a sound; the spacebar always plays/pauses and never types a space.
 final class ShortcutManager: ObservableObject {
     static let spacebarKeyCode: UInt16 = 49
     static let microphoneKeyCode: UInt16 = 9
@@ -17,7 +19,7 @@ final class ShortcutManager: ObservableObject {
 
     /// Why `keyCode` can't be a shot hotkey because a fixed hotkey already owns it, or nil if it's free.
     static func reservedUse(ofKeyCode keyCode: UInt16) -> String? {
-        if keyCode == spacebarKeyCode { return "Space plays/pauses the music player." }
+        if keyCode == spacebarKeyCode { return "Space pauses hotkey sounds and plays/pauses the music player." }
         if keyCode == microphoneKeyCode { return "V is the microphone hotkey." }
         if keyCode == escapeKeyCode { return "Escape can't be used." }
         if let slot = HotkeyBarStore.keySlots.first(where: { $0.keyCode == keyCode }) {
@@ -96,13 +98,22 @@ final class ShortcutManager: ObservableObject {
             return nil
         }
 
-        guard !isEditingText else { return event }
-
+        // Checked before the text-editing guard: Space is always the play/pause key, so it's
+        // consumed even in a text field and never types a space.
         let hasNoModifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty
         if hasNoModifiers, event.keyCode == Self.spacebarKeyCode {
-            musicPlayerStore.togglePlayPause()
+            // Hotkey sounds take priority: pause them and leave the music player alone.
+            let hotkeyIDs = hotkeyPlayingIDs
+            if hotkeyIDs.isEmpty {
+                musicPlayerStore.togglePlayPause()
+            } else {
+                hotkeyIDs.forEach { audioPlayerManager.pause($0) }
+            }
             return nil
         }
+
+        guard !isEditingText else { return event }
+
         if hasNoModifiers, event.keyCode == Self.microphoneKeyCode {
             handleMicrophoneKeyDown()
             return nil
@@ -144,6 +155,16 @@ final class ShortcutManager: ObservableObject {
         case .pushToTalk:
             microphoneManager.setLive(true)
         }
+    }
+
+    /// Sounds playing other than the music player's current track, i.e. ones started by a hotkey,
+    /// shortcut, or tile.
+    private var hotkeyPlayingIDs: Set<UUID> {
+        var ids = audioPlayerManager.playingIDs
+        if musicPlayerStore.isPlaying, let musicID = musicPlayerStore.currentSoundID {
+            ids.remove(musicID)
+        }
+        return ids
     }
 
     private var isEditingText: Bool {

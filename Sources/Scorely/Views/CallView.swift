@@ -93,6 +93,7 @@ struct CallView: View {
         .animation(DesignSystem.Motion.quickFade, value: focus != nil)
         .onExitCommand { endEditing() }
         .endsEditingOnOutsideClick()
+        .gamesheetTabNavigation(focus: $focus)
         // AppKit can hand the first text field focus on its own when the view appears, which
         // would silently turn hotkeys off.
         .onAppear { DispatchQueue.main.async { endEditing() } }

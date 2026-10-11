@@ -10,9 +10,41 @@ import CoreAudio
 final class MicrophoneManager: ObservableObject {
     @Published private(set) var isLive = false
 
-    private let engine = AVAudioEngine()
+    /// Rebuilt on every start rather than reused: an engine's output node stays bound to whatever
+    /// device was the default when it was first configured, so connecting a Bluetooth speaker
+    /// mid-session would otherwise leave the mic playing to the old device (or nowhere).
+    private var engine: AVAudioEngine?
+    private var volume: Float = 1.0
     private var selectedDeviceUID: String?
     private var cancellables = Set<AnyCancellable>()
+    private var configurationObserver: NSObjectProtocol?
+    private var defaultOutputListener: AudioObjectPropertyListenerBlock?
+    private var defaultOutputAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+
+    init() {
+        // Follow the system output: when speakers/Bluetooth connect or the user picks a new
+        // output, re-route the live mic there so the audience keeps hearing it.
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            self?.restartIfLive()
+        }
+        defaultOutputListener = listener
+        AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject), &defaultOutputAddress, .main, listener
+        )
+    }
+
+    deinit {
+        if let defaultOutputListener {
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject), &defaultOutputAddress, .main, defaultOutputListener
+            )
+        }
+        stop()
+    }
 
     /// Keeps the selected input device and mic volume in sync with the persisted settings,
     /// hot-swapping the device on the fly if the mic is currently live.
@@ -23,10 +55,7 @@ final class MicrophoneManager: ObservableObject {
             .sink { [weak self] deviceID in
                 guard let self else { return }
                 selectedDeviceUID = deviceID
-                if isLive {
-                    stop()
-                    start()
-                }
+                restartIfLive()
             }
             .store(in: &cancellables)
 
@@ -34,7 +63,8 @@ final class MicrophoneManager: ObservableObject {
             .map(\.microphoneVolume)
             .removeDuplicates()
             .sink { [weak self] volume in
-                self?.engine.mainMixerNode.outputVolume = volume
+                self?.volume = volume
+                self?.engine?.mainMixerNode.outputVolume = volume
             }
             .store(in: &cancellables)
     }
@@ -70,6 +100,7 @@ final class MicrophoneManager: ObservableObject {
     private func startEngine() {
         guard !isLive else { return }
 
+        let engine = AVAudioEngine()
         let input = engine.inputNode
         if let uid = selectedDeviceUID,
            let deviceID = Self.deviceID(forUID: uid),
@@ -88,15 +119,38 @@ final class MicrophoneManager: ObservableObject {
         let format = input.inputFormat(forBus: 0)
         guard format.channelCount > 0 else { return }
         engine.connect(input, to: engine.mainMixerNode, format: format)
+        engine.mainMixerNode.outputVolume = volume
 
         engine.prepare()
-        isLive = (try? engine.start()) != nil
+        guard (try? engine.start()) != nil else { return }
+
+        // The engine stops itself when its input or output device is reconfigured (e.g. a
+        // Bluetooth device connecting, or a sample-rate change); rebuild it so the mic stays live.
+        configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: .main
+        ) { [weak self] _ in
+            self?.restartIfLive()
+        }
+        self.engine = engine
+        isLive = true
     }
 
     private func stop() {
-        engine.stop()
-        engine.disconnectNodeInput(engine.mainMixerNode)
+        if let configurationObserver {
+            NotificationCenter.default.removeObserver(configurationObserver)
+        }
+        configurationObserver = nil
+        engine?.stop()
+        engine = nil
         isLive = false
+    }
+
+    private func restartIfLive() {
+        guard isLive else { return }
+        stop()
+        startEngine()
     }
 
     // MARK: - CoreAudio device enumeration

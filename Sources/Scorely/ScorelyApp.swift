@@ -34,7 +34,7 @@ struct ScorelyApp: App {
         let hotkeys = HotkeyBarStore(baseDirectory: store.appSupportDirectory)
         let settings = SettingsStore(baseDirectory: store.appSupportDirectory)
         let microphone = MicrophoneManager()
-        let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audio)
+        let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audio, baseDirectory: store.appSupportDirectory)
         audio.bind(to: settings)
         audio.bind(to: store)
         microphone.bind(to: settings)
@@ -79,6 +79,7 @@ struct ScorelyApp: App {
                     hotkeyBarStore.flush()
                     settingsStore.flush()
                     gameStore.flush()
+                    musicPlayerStore.flush()
                 }
                 .preferredColorScheme(settingsStore.settings.appearance.colorScheme)
                 .tint(DesignSystem.Colors.accentPrimary)

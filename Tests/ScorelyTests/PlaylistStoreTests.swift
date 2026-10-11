@@ -298,6 +298,36 @@ final class PlaylistStoreTests: XCTestCase {
         XCTAssertEqual(store.playlists.first?.tabs.count, 1)
     }
 
+    func testMoveTabReordersFoldersInEitherDirection() throws {
+        let store = PlaylistStore(baseDirectory: tempDirectory)
+        let playlist = store.library
+        let a = store.addTab(name: "A", toPlaylist: playlist.id)!
+        _ = store.addTab(name: "B", toPlaylist: playlist.id)!
+        let c = store.addTab(name: "C", toPlaylist: playlist.id)!
+        let root = Playlist.defaultTabName
+
+        store.moveTab(a.id, to: c.id, in: playlist.id)
+        XCTAssertEqual(store.playlists.first?.tabs.map(\.name), [root, "B", "C", "A"])
+
+        store.moveTab(a.id, to: store.playlists.first!.tabs[1].id, in: playlist.id)
+        XCTAssertEqual(store.playlists.first?.tabs.map(\.name), [root, "A", "B", "C"])
+    }
+
+    func testMoveTabKeepsRootFirstAndIgnoresUnknownIDs() throws {
+        let store = PlaylistStore(baseDirectory: tempDirectory)
+        let playlist = store.library
+        let rootID = store.playlists.first!.tabs.first!.id
+        let a = store.addTab(name: "A", toPlaylist: playlist.id)!
+        let b = store.addTab(name: "B", toPlaylist: playlist.id)!
+        let expected = [Playlist.defaultTabName, "A", "B"]
+
+        store.moveTab(b.id, to: rootID, in: playlist.id)
+        store.moveTab(rootID, to: a.id, in: playlist.id)
+        store.moveTab(UUID(), to: a.id, in: playlist.id)
+
+        XCTAssertEqual(store.playlists.first?.tabs.map(\.name), expected)
+    }
+
     func testPlaylistDecodesLegacySoundsOnlyFormatIntoDefaultTab() throws {
         let legacyJSON = """
         {"id":"\(UUID().uuidString)","name":"Legacy","sounds":[{"id":"\(UUID().uuidString)","name":"Old","fileName":"old.wav"}]}

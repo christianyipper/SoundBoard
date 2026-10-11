@@ -42,8 +42,7 @@ enum GamePeriod: Int, CaseIterable, Identifiable, Codable, Comparable {
     }
 }
 
-/// Penalty types, split into two groups that are each single-select but combine with each other
-/// (e.g. Minor + GM).
+/// Penalty types, any combination of which can apply to one penalty (e.g. Minor + GM).
 enum PenaltyType: String, CaseIterable, Identifiable, Codable {
     case minor
     case doubleMinor
@@ -66,64 +65,50 @@ enum PenaltyType: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum PenaltyTypeRow: CaseIterable, Hashable {
-    case severity
-    case additional
-
-    var title: String {
-        switch self {
-        case .severity: "Severity"
-        case .additional: "Additional"
-        }
-    }
-
-    var types: [PenaltyType] {
-        switch self {
-        case .severity: [.minor, .doubleMinor, .major]
-        case .additional: [.match, .misc, .gameMisconduct]
-        }
-    }
-}
-
 extension Set where Element == PenaltyType {
-    /// Picking a type clears any other selection from the same group; the other group is left
-    /// alone so the two can combine.
     mutating func toggle(_ type: PenaltyType) {
-        if contains(type) {
-            remove(type)
-        } else {
-            if let row = PenaltyTypeRow.allCases.first(where: { $0.types.contains(type) }) {
-                row.types.forEach { remove($0) }
-            }
-            insert(type)
-        }
+        if contains(type) { remove(type) } else { insert(type) }
     }
 
-    /// The selected types in display order (severity first, then additional).
+    /// The selected types in display order.
     var ordered: [PenaltyType] {
-        PenaltyTypeRow.allCases.flatMap { row in row.types.filter { contains($0) } }
+        PenaltyType.allCases.filter { contains($0) }
     }
 }
 
-/// Listed alphabetically, which is the order the gamesheet's infraction picker shows them in.
+/// Listed alphabetically. The gamesheet's picker shows them grouped by `InfractionCategory`.
 enum Infraction: String, CaseIterable, Identifiable, Codable {
+    case abuseOfOfficial
     case aggressor
     case boarding
-    case cfb
+    case bodyChecking
+    case buttEnding
     case charging
+    case cfb
+    case clipping
     case crossChecking
     case delayOfGame
+    case diving
+    case faceMask
     case fighting
-    case headContact
+    case handlingThePuck
+    case headButting
     case highSticking
     case holding
+    case holdingTheStick
     case hooking
+    case headContact
     case instigator
     case interference
+    case interferenceFromBench
+    case kicking
+    /// No longer offered in the picker; kept so penalties saved with it still load.
     case kneeing
     case roughing
     case slashing
     case slewFoot
+    case spearing
+    case throwingEquipment
     case tooManyMen
     case tripping
     case unsportsmanlike
@@ -132,36 +117,85 @@ enum Infraction: String, CaseIterable, Identifiable, Codable {
 
     var label: String {
         switch self {
+        case .abuseOfOfficial: "Abuse of Official"
         case .aggressor: "Aggressor"
         case .boarding: "Boarding"
-        case .cfb: "CFB"
+        case .bodyChecking: "Body Checking"
+        case .buttEnding: "Butt-Ending"
         case .charging: "Charging"
+        case .cfb: "Check From Behind"
+        case .clipping: "Clipping"
         case .crossChecking: "Cross-Checking"
         case .delayOfGame: "Delay of Game"
+        case .diving: "Diving"
+        case .faceMask: "Face Mask"
         case .fighting: "Fighting"
-        case .headContact: "Head Contact"
+        case .handlingThePuck: "Handling the Puck"
+        case .headButting: "Head-Butting"
         case .highSticking: "High-Sticking"
         case .holding: "Holding"
+        case .holdingTheStick: "Holding the Stick"
         case .hooking: "Hooking"
+        case .headContact: "Illegal Check to Head"
         case .instigator: "Instigator"
         case .interference: "Interference"
+        case .interferenceFromBench: "Interference From Bench"
+        case .kicking: "Kicking"
         case .kneeing: "Kneeing"
         case .roughing: "Roughing"
         case .slashing: "Slashing"
-        case .slewFoot: "Slew Foot"
+        case .slewFoot: "Slew Footing"
+        case .spearing: "Spearing"
+        case .throwingEquipment: "Throwing Equipment"
         case .tooManyMen: "Too Many Men"
         case .tripping: "Tripping"
         case .unsportsmanlike: "Unsportsmanlike"
         }
     }
 
-    /// The spelled-out name used in the Call view, e.g. "Checking From Behind" for CFB.
+    /// The spelled-out name used in the Call view, e.g. "Checking From Behind".
     var fullName: String {
         switch self {
         case .cfb: "Checking From Behind"
         case .headContact: "Illegal Check to the Head"
         case .unsportsmanlike: "Unsportsmanlike Conduct"
         default: label
+        }
+    }
+}
+
+extension Array where Element == Infraction {
+    /// e.g. "Roughing and Fighting".
+    var fullNames: String { map(\.fullName).joined(separator: " and ") }
+}
+
+/// The tabs above the gamesheet's infraction buttons.
+enum InfractionCategory: CaseIterable, Hashable {
+    case physical
+    case restraining
+    case stick
+    case other
+
+    var label: String {
+        switch self {
+        case .physical: "Physical"
+        case .restraining: "Restraining"
+        case .stick: "Stick"
+        case .other: "Other"
+        }
+    }
+
+    var infractions: [Infraction] {
+        switch self {
+        case .physical:
+            [.boarding, .bodyChecking, .charging, .clipping, .headContact, .faceMask, .fighting, .aggressor,
+             .instigator, .headButting, .cfb, .kicking, .roughing, .slewFoot, .throwingEquipment]
+        case .restraining:
+            [.holding, .holdingTheStick, .hooking, .interference, .interferenceFromBench, .tripping]
+        case .stick:
+            [.buttEnding, .crossChecking, .highSticking, .slashing, .spearing]
+        case .other:
+            [.abuseOfOfficial, .delayOfGame, .diving, .handlingThePuck, .tooManyMen, .unsportsmanlike]
         }
     }
 }
@@ -215,7 +249,8 @@ struct GoalDraft: Equatable {
 
 /// One in-progress penalty row, before it's submitted as a `PenaltyEntry`.
 struct PenaltyDraftRow: Equatable {
-    var infraction: Infraction?
+    /// In the order they were picked.
+    var infractions: [Infraction] = []
     var types: Set<PenaltyType> = []
     var playerNumber = ""
     /// Optional number of the player serving the penalty.
@@ -223,7 +258,7 @@ struct PenaltyDraftRow: Equatable {
 
     static let rowsPerSide = 3
 
-    var isComplete: Bool { infraction != nil && !types.isEmpty && !playerNumber.isEmpty }
+    var isComplete: Bool { !infractions.isEmpty && !types.isEmpty && !playerNumber.isEmpty }
 }
 
 /// A side's goalkeepers, typed under its shots: the starting goalie's number, the substitute's
@@ -326,7 +361,7 @@ struct PenaltyEntry: Identifiable, Codable, Equatable {
     var team: TeamSide
     var period: GamePeriod
     var time: String
-    var infraction: Infraction
+    var infractions: [Infraction]
     var types: [PenaltyType]
     var playerNumber: String
     var servedBy: String?
@@ -338,7 +373,7 @@ struct PenaltyEntry: Identifiable, Codable, Equatable {
         team: TeamSide,
         period: GamePeriod,
         time: String,
-        infraction: Infraction,
+        infractions: [Infraction],
         types: [PenaltyType],
         playerNumber: String,
         servedBy: String? = nil,
@@ -348,17 +383,44 @@ struct PenaltyEntry: Identifiable, Codable, Equatable {
         self.team = team
         self.period = period
         self.time = time
-        self.infraction = infraction
+        self.infractions = infractions
         self.types = types
         self.playerNumber = playerNumber
         self.servedBy = servedBy
         self.recordedAt = recordedAt
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case id, team, period, time, infractions, types, playerNumber, servedBy, recordedAt
+    }
+
+    /// Penalties saved before a row could hold several infractions stored a single `infraction`.
+    private enum LegacyCodingKeys: String, CodingKey {
+        case infraction
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        team = try container.decode(TeamSide.self, forKey: .team)
+        period = try container.decode(GamePeriod.self, forKey: .period)
+        time = try container.decode(String.self, forKey: .time)
+        if let infractions = try container.decodeIfPresent([Infraction].self, forKey: .infractions) {
+            self.infractions = infractions
+        } else {
+            let legacy = try decoder.container(keyedBy: LegacyCodingKeys.self)
+            infractions = [try legacy.decode(Infraction.self, forKey: .infraction)]
+        }
+        types = try container.decode([PenaltyType].self, forKey: .types)
+        playerNumber = try container.decode(String.self, forKey: .playerNumber)
+        servedBy = try container.decodeIfPresent(String.self, forKey: .servedBy)
+        recordedAt = try container.decode(Date.self, forKey: .recordedAt)
+    }
+
     /// e.g. "Tripping: Minor + GM #45 (Served by #12)".
     var summary: String {
         [
-            "\(infraction.label): \(types.map(\.label).joined(separator: " + "))",
+            "\(infractions.map(\.label).joined(separator: " + ")): \(types.map(\.label).joined(separator: " + "))",
             "#\(playerNumber)",
             servedBy.map { "(Served by #\($0))" } ?? ""
         ]

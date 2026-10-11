@@ -6,6 +6,7 @@ struct ContentView: View {
     @EnvironmentObject private var audioPlayerManager: AudioPlayerManager
     @EnvironmentObject private var microphoneManager: MicrophoneManager
     @EnvironmentObject private var hotkeyBarStore: HotkeyBarStore
+    @EnvironmentObject private var musicPlayerStore: MusicPlayerStore
     @Environment(\.openSettings) private var openSettings
 
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -47,10 +48,11 @@ struct ContentView: View {
                 Button {
                     audioPlayerManager.resetPlayedStates()
                     hotkeyBarStore.resetAll()
+                    musicPlayerStore.resetHistory()
                 } label: {
                     Label("Reset", systemImage: "arrow.counterclockwise")
                 }
-                .help("Reset played states and clear every hotkey slot assignment")
+                .help("Reset played states, clear every hotkey slot assignment and forget the music player's history")
             }
 
             ToolbarItem {

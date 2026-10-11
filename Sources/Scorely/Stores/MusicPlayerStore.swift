@@ -7,8 +7,9 @@ import Combine
 /// cues up the next track, so the next play starts a fresh song rather than resuming this one. A
 /// track that finishes on its own behaves the same way: the next track is cued but not started,
 /// so nothing plays until the user hits Play again. Each folder's play order and position are
-/// kept for the life of the app, so switching away and back picks up on the same track with the
-/// same history; only the refresh button (restartFromFirstTrack()) starts a folder over.
+/// kept, so switching away and back picks up on the same track with the same history; only the
+/// refresh button (restartFromFirstTrack()) starts a folder over. That history is saved to disk
+/// too, so restarting the app mid-game doesn't replay songs already played.
 final class MusicPlayerStore: ObservableObject {
     /// The folder (`SoundTab`) whose sounds are shuffled and played.
     @Published var selectedFolderID: UUID? {
@@ -41,9 +42,24 @@ final class MusicPlayerStore: ObservableObject {
     private var fileDurations: [UUID: TimeInterval] = [:]
     private var cancellables = Set<AnyCancellable>()
 
-    init(playlistStore: PlaylistStore, audioPlayerManager: AudioPlayerManager) {
+    /// Where the play history is saved; nil keeps it in memory only.
+    private let fileURL: URL?
+    private var saveWorkItem: DispatchWorkItem?
+
+    private struct PersistedState: Codable {
+        var selectedFolderID: UUID?
+        var isShuffled: Bool
+        var shuffleOrders: [UUID: [UUID]]
+        var currentIndices: [UUID: Int]
+        /// Whether the cued track had started playing, so it counts as played on relaunch.
+        var wasPlaying: Bool
+    }
+
+    init(playlistStore: PlaylistStore, audioPlayerManager: AudioPlayerManager, baseDirectory: URL? = nil) {
         self.playlistStore = playlistStore
         self.audioPlayerManager = audioPlayerManager
+        fileURL = baseDirectory?.appendingPathComponent("musicplayer.json")
+        restoreSavedState()
 
         audioPlayerManager.$playingIDs
             .sink { [weak self] playingIDs in
@@ -108,6 +124,7 @@ final class MusicPlayerStore: ObservableObject {
             // position the user scrubbed to while paused.
             play(folderID: selectedFolderID, from: elapsedTime)
         }
+        scheduleSave()
     }
 
     /// Jumps to the next track in the play order, preserving the current play/pause state:
@@ -128,6 +145,7 @@ final class MusicPlayerStore: ObservableObject {
             trackStartDate = nil
             elapsedTime = 0
         }
+        scheduleSave()
     }
 
     /// Jumps to the previous track in the play order, preserving the current play/pause state
@@ -147,6 +165,7 @@ final class MusicPlayerStore: ObservableObject {
             trackStartDate = nil
             elapsedTime = 0
         }
+        scheduleSave()
     }
 
     /// Turns shuffle on or off without interrupting the current track. Turning it on shuffles
@@ -176,6 +195,7 @@ final class MusicPlayerStore: ObservableObject {
         guard let selectedFolderID else { return }
         currentIndices[selectedFolderID] = currentIndices[selectedFolderID] ?? 0
         currentSoundID = soundID(atCurrentIndexOf: selectedFolderID)
+        scheduleSave()
     }
 
     /// Jumps back to the folder's first sound and starts its play order over: its cached shuffle
@@ -203,6 +223,78 @@ final class MusicPlayerStore: ObservableObject {
             trackStartDate = nil
             elapsedTime = 0
         }
+        scheduleSave()
+    }
+
+    /// Forgets every folder's play history (the toolbar's Reset). A playing track carries on and
+    /// a fresh order follows it; otherwise the selected folder is cued from the start of a fresh
+    /// order.
+    func resetHistory() {
+        shuffleOrders.removeAll()
+        currentIndices.removeAll()
+        if let selectedFolderID {
+            let folderOrder = folderSoundIDs(for: selectedFolderID)
+            if isPlaying, let currentSoundID, folderOrder.contains(currentSoundID) {
+                if isShuffled {
+                    shuffleOrders[selectedFolderID] = [currentSoundID] + folderOrder.filter { $0 != currentSoundID }.shuffled()
+                    currentIndices[selectedFolderID] = 0
+                } else {
+                    currentIndices[selectedFolderID] = folderOrder.firstIndex(of: currentSoundID)
+                }
+            } else {
+                elapsedTime = 0
+                currentSoundID = cueFirstTrack(for: selectedFolderID)
+            }
+        }
+        scheduleSave()
+    }
+
+    func flush() {
+        saveWorkItem?.cancel()
+        writeToDisk()
+    }
+
+    // MARK: - Persistence
+
+    /// Picks up the saved folder, shuffle setting and each folder's play order and position. A
+    /// track that was playing when the app quit counts as played, so the next one is cued.
+    private func restoreSavedState() {
+        guard let fileURL,
+              let data = try? Data(contentsOf: fileURL),
+              let state = try? JSONDecoder().decode(PersistedState.self, from: data) else { return }
+        isShuffled = state.isShuffled
+        shuffleOrders = state.shuffleOrders
+        currentIndices = state.currentIndices
+        guard let folderID = state.selectedFolderID, playlistStore.folder(withID: folderID) != nil else { return }
+        // Set directly: didSet doesn't run during init, and selectFolder() would re-cue anyway.
+        selectedFolderID = folderID
+        if state.wasPlaying, currentIndices[folderID] != nil {
+            advanceIndex(for: folderID)
+        }
+        currentSoundID = currentIndices[folderID] == nil ? cueFirstTrack(for: folderID) : soundID(atCurrentIndexOf: folderID)
+    }
+
+    private func scheduleSave() {
+        guard fileURL != nil else { return }
+        saveWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            self?.writeToDisk()
+        }
+        saveWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: item)
+    }
+
+    private func writeToDisk() {
+        guard let fileURL else { return }
+        let state = PersistedState(
+            selectedFolderID: selectedFolderID,
+            isShuffled: isShuffled,
+            shuffleOrders: shuffleOrders,
+            currentIndices: currentIndices,
+            wasPlaying: isPlaying
+        )
+        guard let data = try? JSONEncoder().encode(state) else { return }
+        try? data.write(to: fileURL, options: .atomic)
     }
 
     // MARK: - Private
@@ -222,6 +314,7 @@ final class MusicPlayerStore: ObservableObject {
         currentSoundID = folderID.flatMap { folderID in
             currentIndices[folderID] == nil ? cueFirstTrack(for: folderID) : soundID(atCurrentIndexOf: folderID)
         }
+        scheduleSave()
     }
 
     private func tickElapsedTime() {
@@ -248,6 +341,7 @@ final class MusicPlayerStore: ObservableObject {
         elapsedTime = 0
         advanceIndex(for: selectedFolderID)
         currentSoundID = soundID(atCurrentIndexOf: selectedFolderID)
+        scheduleSave()
     }
 
     /// Ensures a play order exists for `folderID` (reusing the cached one if present),

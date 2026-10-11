@@ -40,6 +40,24 @@ enum GamesheetField: Hashable {
             }
         }
     }
+
+    /// The fields Tab cycles through from this one, in order: its own section only (a side's goal
+    /// entry, a side's penalty rows, the officials, a side's goalkeeper fields), so tabbing never
+    /// jumps into another card. See View.gamesheetTabNavigation(focus:).
+    var tabGroup: [GamesheetField] {
+        switch self {
+        case .time:
+            [.time]
+        case .goal(let side, _):
+            GoalSlot.allCases.map { .goal(side, $0) }
+        case .penaltyNumber(let side, _), .servedBy(let side, _):
+            (0..<PenaltyDraftRow.rowsPerSide).flatMap { [.penaltyNumber(side, $0), .servedBy(side, $0)] }
+        case .goalie(let side), .goalieSub(let side), .goalieSubTime(let side):
+            [.goalie(side), .goalieSub(side), .goalieSubTime(side)]
+        case .official:
+            Officials.Role.allCases.flatMap { role in (0..<Officials.perRole).map { .official(role, $0) } }
+        }
+    }
 }
 
 /// Live game entry ported from the ScoreCard app, laid out the same way: team dropdowns either
@@ -56,6 +74,11 @@ struct GamesheetView: View {
 
     /// Sides showing their roster in place of the shots/goals/penalties column.
     @State private var rosterSides: Set<TeamSide> = []
+    /// Measured heights of the team columns' goal and penalty cards, which the time and officials
+    /// cards match so the center column's gaps line up with the sides'. Nil while neither side
+    /// shows that card.
+    @State private var goalCardHeight: CGFloat?
+    @State private var penaltyCardHeight: CGFloat?
 
     private let centerColumnWidth: CGFloat = 240
 
@@ -72,12 +95,14 @@ struct GamesheetView: View {
                 HStack(alignment: .top, spacing: 12) {
                     teamColumn(for: .home)
                     VStack(spacing: 12) {
-                        PeriodPanel(focus: $focus)
-                        OfficialsPanel(focus: $focus)
+                        PeriodPanel(focus: $focus, timeCardHeight: goalCardHeight)
+                        officialsColumn
                     }
                     .frame(width: centerColumnWidth)
                     teamColumn(for: .away)
                 }
+                .onPreferenceChange(GoalCardHeightKey.self) { goalCardHeight = $0 }
+                .onPreferenceChange(PenaltyCardHeightKey.self) { penaltyCardHeight = $0 }
                 .animation(.easeInOut(duration: 0.25), value: gameStore.activePenaltyRow?.side)
                 .animation(.easeInOut(duration: 0.25), value: rosterSides)
             }
@@ -100,12 +125,19 @@ struct GamesheetView: View {
         }
         .animation(DesignSystem.Motion.quickFade, value: focus != nil)
         .onExitCommand { endEditing() }
+        .gamesheetTabNavigation(focus: $focus)
         // AppKit can hand the first text field focus on its own when the view appears, which
         // would silently turn hotkeys off.
         .onAppear { DispatchQueue.main.async { endEditing() } }
         .onDisappear { endEditing() }
-        // Clicking into a penalty row's number fields selects that row too.
-        .onChange(of: focus) { _, field in
+        // Clicking into a penalty row's number fields selects that row too. Editing the time
+        // holds the countdown; leaving the field picks it back up (typing a time stops it).
+        .onChange(of: focus) { oldField, field in
+            if field == .time {
+                gameStore.pauseClock()
+            } else if oldField == .time {
+                gameStore.resumeClock()
+            }
             switch field {
             case .penaltyNumber(let side, let index), .servedBy(let side, let index):
                 gameStore.activePenaltyRow = PenaltyRowID(side: side, index: index)
@@ -157,8 +189,23 @@ struct GamesheetView: View {
         )
     }
 
-    /// A side's penalty rows, or — while a row on the other side is selected — the infraction and
-    /// penalty-type buttons for that row, slid in over this column as in the ScoreCard app.
+    /// The officials card, with the penalty-type buttons laid over it while a penalty row is
+    /// selected. The officials stay in the layout underneath so the column keeps its height.
+    private var officialsColumn: some View {
+        let pickingSide = gameStore.activePenaltyRow?.side
+        return OfficialsPanel(focus: $focus, minHeight: penaltyCardHeight)
+            .opacity(pickingSide == nil ? 1 : 0)
+            .allowsHitTesting(pickingSide == nil)
+            .overlay {
+                if let pickingSide {
+                    PenaltyTypePicker(activeSide: pickingSide)
+                        .transition(.opacity)
+                }
+            }
+    }
+
+    /// A side's penalty rows, or — while a row on the other side is selected — the infraction
+    /// buttons for that row, slid in over this column as in the ScoreCard app.
     @ViewBuilder
     private func penaltyColumn(for side: TeamSide) -> some View {
         if gameStore.activePenaltyRow?.side == side.opposite {
@@ -190,16 +237,40 @@ extension TeamSide {
 }
 
 extension View {
-    func gamesheetCard() -> some View {
+    /// `minHeight` is the whole card's, padding included; content sits at `alignment` within it.
+    func gamesheetCard(minHeight: CGFloat? = nil, alignment: Alignment = .center) -> some View {
         padding(14)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: minHeight, alignment: alignment)
             .glassCard()
+    }
+
+    /// Reports this view's height under `key`.
+    fileprivate func reportsHeight<Key: PreferenceKey>(_ key: Key.Type) -> some View where Key.Value == CGFloat? {
+        background(GeometryReader { proxy in
+            Color.clear.preference(key: key, value: proxy.size.height)
+        })
     }
 }
 
 private enum GamesheetLayout {
     /// Content height shared by the shots cards and the period card so the middle row lines up.
     static let shotsRowHeight: CGFloat = 56
+}
+
+/// The taller of the two sides' goal cards.
+private struct GoalCardHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat?
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        if let next = nextValue() { value = max(value ?? 0, next) }
+    }
+}
+
+/// The taller of the two sides' penalty cards.
+private struct PenaltyCardHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat?
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        if let next = nextValue() { value = max(value ?? 0, next) }
+    }
 }
 
 private struct SectionLabel: View {
@@ -656,6 +727,7 @@ private struct TeamPanel: View {
             .help(canSubmit ? "Record this goal at the current period and time" : "Pick a goal type and enter a scorer")
         }
         .gamesheetCard()
+        .reportsHeight(GoalCardHeightKey.self)
     }
 
     private func goalField(
@@ -681,11 +753,14 @@ private struct TeamPanel: View {
     }
 }
 
-/// Center column: period picker and the clock time stamped onto goals and penalties.
+/// Center column: period picker and the clock time stamped onto goals and penalties, with
+/// +30s/+60s buttons that add to the time and count it down to 0:00.
 private struct PeriodPanel: View {
     @EnvironmentObject private var gameStore: GameStore
 
     var focus: FocusState<GamesheetField?>.Binding
+    /// Matches the goal cards beside it.
+    var timeCardHeight: CGFloat?
 
     var body: some View {
         VStack(spacing: 12) {
@@ -716,9 +791,27 @@ private struct PeriodPanel: View {
                     height: 64
                 )
                 .help("Type the clock time, e.g. 1245 for 12:45. It's stamped onto goals and penalties.")
+
+                HStack(spacing: 8) {
+                    countdownButton(seconds: 30)
+                    countdownButton(seconds: 60)
+                }
             }
-            .gamesheetCard()
+            .gamesheetCard(minHeight: timeCardHeight)
         }
+    }
+
+    private func countdownButton(seconds: Int) -> some View {
+        GamesheetButton(outline: DesignSystem.Colors.accentPrimary) {
+            focus.wrappedValue = nil
+            NSApp.keyWindow?.makeFirstResponder(nil)
+            gameStore.addClockTime(seconds: seconds)
+        } label: {
+            Text("+\(seconds)s")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(DesignSystem.Colors.accentPrimary)
+        }
+        .help("Add \(seconds) seconds to the time and count down to 0:00. Editing the time pauses it; typing a time stops it.")
     }
 }
 
@@ -728,6 +821,8 @@ private struct OfficialsPanel: View {
     @EnvironmentObject private var gameStore: GameStore
 
     var focus: FocusState<GamesheetField?>.Binding
+    /// Matches the penalty cards beside it.
+    var minHeight: CGFloat?
 
     @State private var isAnnouncementExpanded = false
 
@@ -786,7 +881,7 @@ private struct OfficialsPanel: View {
                 .textSelection(.enabled)
             }
         }
-        .gamesheetCard()
+        .gamesheetCard(minHeight: minHeight, alignment: .top)
     }
 
     private func row(role: Officials.Role, index: Int) -> some View {
@@ -845,6 +940,7 @@ private struct PenaltyPanel: View {
             .help(canSubmit ? "Record every complete row at the current period and time" : "Fill in an infraction, type and player number")
         }
         .gamesheetCard()
+        .reportsHeight(PenaltyCardHeightKey.self)
     }
 
     /// Click the row's infraction/type area to select it and start typing the player number
@@ -855,7 +951,7 @@ private struct PenaltyPanel: View {
         let isActive = gameStore.activePenaltyRow == id
         return HStack(alignment: .top, spacing: 6) {
             HStack(spacing: 6) {
-                rowValue(row.infraction?.label, placeholder: "Infraction")
+                rowValue(row.infractions.isEmpty ? nil : row.infractions.map(\.label).joined(separator: " + "), placeholder: "Infraction")
                 rowValue(row.types.isEmpty ? nil : row.types.ordered.map(\.label).joined(separator: " + "), placeholder: "Type")
             }
             .frame(height: 36)
@@ -914,22 +1010,27 @@ private struct PenaltyPanel: View {
     }
 }
 
-/// ScoreCard's penalty picker: a grid of infraction buttons above two rows of penalty-type
-/// buttons (Minor / Double Minor / Major, then Match / Misc / GM — one from each row can
-/// combine). Applies to the selected penalty row, highlighted in that side's color; clicking the
-/// row again, Escape or a click on empty space closes it.
+/// ScoreCard's infraction picker: Physical / Restraining / Stick / Other tabs above that
+/// category's infraction buttons, any number of which can be picked. Applies to the selected
+/// penalty row, highlighted in that side's color (its penalty types are picked in
+/// `PenaltyTypePicker`, over the officials); clicking the row again, Escape or a click on empty
+/// space closes it.
 private struct PenaltyPicker: View {
     @EnvironmentObject private var gameStore: GameStore
 
     let activeSide: TeamSide
 
+    @State private var category: InfractionCategory = .physical
+
+    private static let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 4)
+
     var body: some View {
         let draft = gameStore.activePenaltyDraft
         VStack(spacing: 10) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 6)], spacing: 6) {
-                ForEach(Infraction.allCases) { infraction in
-                    pickerButton(infraction.label, isSelected: draft?.infraction == infraction) {
-                        gameStore.setInfraction(infraction)
+            HStack(spacing: 6) {
+                ForEach(InfractionCategory.allCases, id: \.self) { tab in
+                    PenaltyPickerButton(title: tab.label, isSelected: category == tab, accent: activeSide.accent) {
+                        category = tab
                     }
                 }
             }
@@ -938,14 +1039,15 @@ private struct PenaltyPicker: View {
                 .fill(DesignSystem.Colors.border)
                 .frame(height: 1)
 
-            VStack(spacing: 6) {
-                ForEach(PenaltyTypeRow.allCases, id: \.self) { group in
-                    HStack(spacing: 6) {
-                        ForEach(group.types) { type in
-                            pickerButton(type.label, isSelected: draft?.types.contains(type) == true) {
-                                gameStore.togglePenaltyType(type)
-                            }
-                        }
+            LazyVGrid(columns: Self.columns, spacing: 6) {
+                ForEach(category.infractions) { infraction in
+                    PenaltyPickerButton(
+                        title: infraction.label,
+                        isSelected: draft?.infractions.contains(infraction) == true,
+                        accent: activeSide.accent,
+                        height: 40
+                    ) {
+                        gameStore.toggleInfraction(infraction)
                     }
                 }
             }
@@ -953,15 +1055,56 @@ private struct PenaltyPicker: View {
         .padding(14)
         .frame(maxWidth: .infinity)
         .glassCard(borderColor: activeSide.accent.opacity(0.6), borderWidth: 2)
+        // Open on the tab holding the row's latest infraction.
+        .onAppear(perform: showDraftCategory)
+        .onChange(of: gameStore.activePenaltyRow) { _, _ in showDraftCategory() }
     }
 
-    private func pickerButton(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        GamesheetButton(fill: isSelected ? activeSide.accent : DesignSystem.Colors.textSecondary.opacity(0.25), height: 34, action: action) {
+    private func showDraftCategory() {
+        guard let last = gameStore.activePenaltyDraft?.infractions.last,
+              let found = InfractionCategory.allCases.first(where: { $0.infractions.contains(last) })
+        else { return }
+        category = found
+    }
+}
+
+/// The penalty-type buttons for the selected penalty row, in one column laid over the officials
+/// card. Any combination can be picked (e.g. Minor + GM).
+private struct PenaltyTypePicker: View {
+    @EnvironmentObject private var gameStore: GameStore
+
+    let activeSide: TeamSide
+
+    var body: some View {
+        let draft = gameStore.activePenaltyDraft
+        VStack(spacing: 6) {
+            ForEach(PenaltyType.allCases) { type in
+                PenaltyPickerButton(title: type.label, isSelected: draft?.types.contains(type) == true, accent: activeSide.accent) {
+                    gameStore.togglePenaltyType(type)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .glassCard(borderColor: activeSide.accent.opacity(0.6), borderWidth: 2)
+    }
+}
+
+private struct PenaltyPickerButton: View {
+    let title: String
+    let isSelected: Bool
+    let accent: Color
+    var height: CGFloat = 34
+    let action: () -> Void
+
+    var body: some View {
+        GamesheetButton(fill: isSelected ? accent : DesignSystem.Colors.textSecondary.opacity(0.25), height: height, action: action) {
             Text(title)
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(isSelected ? DesignSystem.Colors.onAccent : DesignSystem.Colors.textPrimary)
-                .lineLimit(1)
+                .lineLimit(2)
                 .minimumScaleFactor(0.7)
+                .multilineTextAlignment(.center)
                 .padding(.horizontal, 4)
         }
     }

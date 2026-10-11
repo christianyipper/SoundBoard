@@ -15,12 +15,12 @@ final class CallTextTests: XCTestCase {
     }
 
     func testSheetPenaltyJoinsTypes() {
-        let penalty = PenaltyEntry(team: .away, period: .second, time: "08:10", infraction: .fighting, types: [.major, .gameMisconduct], playerNumber: "45")
+        let penalty = PenaltyEntry(team: .away, period: .second, time: "08:10", infractions: [.fighting], types: [.major, .gameMisconduct], playerNumber: "45")
         XCTAssertEqual(CallText.sheetPenalty(penalty), "08:10 - #45, (Major and Game Misconduct) Fighting")
     }
 
     func testSheetPenaltyShowsServingPlayer() {
-        let penalty = PenaltyEntry(team: .home, period: .first, time: "04:20", infraction: .boarding, types: [.minor], playerNumber: "45", servedBy: "12")
+        let penalty = PenaltyEntry(team: .home, period: .first, time: "04:20", infractions: [.boarding], types: [.minor], playerNumber: "45", servedBy: "12")
         XCTAssertEqual(CallText.sheetPenalty(penalty), "04:20 - #45 (#12), (Minor) Boarding")
     }
 
@@ -61,7 +61,7 @@ final class CallTextTests: XCTestCase {
     }
 
     func testCallPenaltyServedBy() {
-        let penalty = PenaltyEntry(team: .away, period: .first, time: "02:00", infraction: .tooManyMen, types: [.minor], playerNumber: "45", servedBy: "5")
+        let penalty = PenaltyEntry(team: .away, period: .first, time: "02:00", infractions: [.tooManyMen], types: [.minor], playerNumber: "45", servedBy: "5")
         XCTAssertEqual(
             CallText.callPenalty(penalty, teamName: "Bears", name: name),
             """
@@ -72,7 +72,7 @@ final class CallTextTests: XCTestCase {
     }
 
     func testCallPenalty() {
-        let minor = PenaltyEntry(team: .away, period: .third, time: "04:20", infraction: .tripping, types: [.minor], playerNumber: "45")
+        let minor = PenaltyEntry(team: .away, period: .third, time: "04:20", infractions: [.tripping], types: [.minor], playerNumber: "45")
         XCTAssertEqual(
             CallText.callPenalty(minor, teamName: "Bears", name: name),
             """
@@ -81,7 +81,7 @@ final class CallTextTests: XCTestCase {
             """
         )
 
-        let major = PenaltyEntry(team: .away, period: .second, time: "08:10", infraction: .fighting, types: [.major, .gameMisconduct], playerNumber: "45")
+        let major = PenaltyEntry(team: .away, period: .second, time: "08:10", infractions: [.fighting], types: [.major, .gameMisconduct], playerNumber: "45")
         XCTAssertEqual(
             CallText.callPenalty(major, teamName: "Bears", name: name),
             """
@@ -100,18 +100,30 @@ final class CallTextTests: XCTestCase {
     }
 
     func testCheckingFromBehindIsSpelledOutInCallView() {
-        let penalty = PenaltyEntry(team: .home, period: .first, time: "05:00", infraction: .cfb, types: [.minor], playerNumber: "9")
+        let penalty = PenaltyEntry(team: .home, period: .first, time: "05:00", infractions: [.cfb], types: [.minor], playerNumber: "9")
         XCTAssertTrue(CallText.sheetPenalty(penalty).hasSuffix("Checking From Behind"))
         XCTAssertTrue(CallText.callPenalty(penalty, teamName: "Wolves", name: { _ in nil }).contains("for Checking From Behind."))
-        XCTAssertEqual(Infraction.cfb.label, "CFB", "the gamesheet keeps the short label")
+        XCTAssertEqual(Infraction.cfb.label, "Check From Behind")
     }
 
     func testHeadContactAndUnsportsmanlikeAreSpelledOutInCallView() {
-        XCTAssertEqual(Infraction.headContact.label, "Head Contact")
+        XCTAssertEqual(Infraction.headContact.label, "Illegal Check to Head")
         XCTAssertEqual(Infraction.headContact.fullName, "Illegal Check to the Head")
         XCTAssertEqual(Infraction.unsportsmanlike.label, "Unsportsmanlike")
         XCTAssertEqual(Infraction.unsportsmanlike.fullName, "Unsportsmanlike Conduct")
         XCTAssertEqual(Infraction.kneeing.fullName, "Kneeing")
+    }
+
+    func testSheetAndCallJoinMultipleInfractions() {
+        let penalty = PenaltyEntry(team: .home, period: .first, time: "05:00", infractions: [.roughing, .fighting], types: [.minor, .major], playerNumber: "9")
+        XCTAssertEqual(CallText.sheetPenalty(penalty), "05:00 - #9, (Minor and Major) Roughing and Fighting")
+        XCTAssertEqual(penalty.summary, "Roughing + Fighting: Minor + Major #9")
+    }
+
+    func testEveryPickerInfractionIsInOneCategory() {
+        let picked = InfractionCategory.allCases.flatMap(\.infractions)
+        XCTAssertEqual(picked.count, Set(picked).count)
+        XCTAssertEqual(Set(picked), Set(Infraction.allCases).subtracting([.kneeing]))
     }
 
     func testInfractionsAreAlphabetical() {

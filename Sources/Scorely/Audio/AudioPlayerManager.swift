@@ -75,7 +75,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     private let engine: AVAudioEngine
-    private var engineStarted = false
+    private var configurationObserver: NSObjectProtocol?
     private var channels: [UUID: Channel] = [:]
     private var cancellables = Set<AnyCancellable>()
     private let loudnessCache: LoudnessCache
@@ -105,6 +105,22 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         self.loudnessCache = loudnessCache
         self.engine = engine
         super.init()
+        // The engine stops itself whenever its output device is reconfigured — waking from sleep,
+        // an aux/USB/Bluetooth device dropping out or reconnecting, a sample-rate change — and
+        // stays stopped, so without this every sound after a lid close/open would play silently.
+        configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleConfigurationChange()
+        }
+    }
+
+    deinit {
+        if let configurationObserver {
+            NotificationCenter.default.removeObserver(configurationObserver)
+        }
     }
 
     /// Keeps fadeOutDuration/volume/reverbAmount in sync with the persisted settings.
@@ -501,11 +517,34 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         playedIDs.remove(soundID)
     }
 
+    /// Checks the engine itself rather than a cached "started" flag: the engine can stop on its
+    /// own (see handleConfigurationChange()), and a flag would keep claiming it's running.
     private func startEngineIfNeeded() {
-        guard !engineStarted else { return }
+        guard !engine.isRunning else { return }
         engine.prepare()
         // If this fails (e.g. no audio output device available), sounds simply won't be
-        // audible; state tracking above still behaves normally rather than crashing.
-        engineStarted = (try? engine.start()) != nil
+        // audible; state tracking above still behaves normally rather than crashing. The next
+        // play() tries again, so audio comes back once a device is available.
+        try? engine.start()
+    }
+
+    /// The engine has stopped itself after an output-device change, taking its player nodes'
+    /// scheduled audio with it. Anything that was playing is marked as stopped (and rewound) so
+    /// the grid doesn't show tiles as playing in silence, then the engine is restarted on the
+    /// new device so the next play is audible.
+    private func handleConfigurationChange() {
+        for channel in channels.values {
+            channel.fadeWorkItem?.cancel()
+            channel.fadeWorkItem = nil
+            channel.playerNode.stop()
+            channel.playerNode.volume = volume
+            channel.needsScheduling = true
+        }
+        pendingStarts.removeAll()
+        playedIDs.formUnion(playingIDs)
+        playingIDs.removeAll()
+        if !channels.isEmpty {
+            startEngineIfNeeded()
+        }
     }
 }
