@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-12T18:48:53.428Z",
+  "updatedAt": "2026-10-13T16:50:42.013Z",
   "seasonId": 14553,
   "divisions": [
     {
@@ -9792,6 +9792,17 @@
               "name": "Jack Blommesteyn",
               "position": "",
               "gp": 1,
+              "goals": 0,
+              "assists": 0,
+              "points": 0,
+              "pim": 0
+            },
+            {
+              "id": 5296371,
+              "number": "78",
+              "name": "Matteo Ranieri",
+              "position": "",
+              "gp": 0,
               "goals": 0,
               "assists": 0,
               "points": 0,
