@@ -188,8 +188,8 @@ enum InfractionCategory: CaseIterable, Hashable {
     var infractions: [Infraction] {
         switch self {
         case .physical:
-            [.boarding, .bodyChecking, .charging, .clipping, .headContact, .faceMask, .fighting, .aggressor,
-             .instigator, .headButting, .cfb, .kicking, .roughing, .slewFoot, .throwingEquipment]
+            [.boarding, .charging, .clipping, .headContact, .faceMask, .fighting, .aggressor, .instigator,
+             .headButting, .cfb, .kicking, .roughing, .slewFoot, .throwingEquipment, .bodyChecking]
         case .restraining:
             [.holding, .holdingTheStick, .hooking, .interference, .interferenceFromBench, .tripping]
         case .stick:

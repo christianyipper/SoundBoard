@@ -252,13 +252,13 @@ final class ShortcutManagerTests: XCTestCase {
         )
         let period = gameStore.game.currentPeriod
 
-        for keyCode: UInt16 in [12, 12, 0, 14] { // Q, Q, A, E
+        for keyCode: UInt16 in [0, 0, 6, 2] { // A, A, Z, D (default home +, home +, home -, away +)
             XCTAssertNil(manager.handle(try XCTUnwrap(Self.keyEvent(keyCode: keyCode, modifierFlags: []))))
         }
         XCTAssertEqual(gameStore.shotCount(for: .home, period: period), 1)
         XCTAssertEqual(gameStore.shotCount(for: .away, period: period), 1)
 
-        XCTAssertNil(manager.handle(try XCTUnwrap(Self.keyEvent(keyCode: 2, modifierFlags: [])))) // D
+        XCTAssertNil(manager.handle(try XCTUnwrap(Self.keyEvent(keyCode: 8, modifierFlags: [])))) // C (away -)
         XCTAssertEqual(gameStore.shotCount(for: .away, period: period), 0)
     }
 

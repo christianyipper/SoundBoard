@@ -8,7 +8,7 @@ final class CallTextTests: XCTestCase {
 
     func testSheetGoalListsScorerAndAssists() {
         let goal = GoalEntry(team: .home, period: .first, time: "12:45", strength: .powerPlay, scorer: "12", assist1: "5", assist2: "7")
-        XCTAssertEqual(CallText.sheetGoal(goal), "12:45 - #12, #5, #7")
+        XCTAssertEqual(CallText.sheetGoal(goal), "12:45 - PP #12, #5, #7")
 
         let unassisted = GoalEntry(team: .home, period: .first, time: "03:00", strength: .even, scorer: "9")
         XCTAssertEqual(CallText.sheetGoal(unassisted), "03:00 - #9")

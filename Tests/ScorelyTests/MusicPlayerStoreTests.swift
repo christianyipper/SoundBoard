@@ -94,7 +94,7 @@ final class MusicPlayerStoreTests: XCTestCase {
         XCTAssertEqual(musicPlayer.currentSoundID, firstCuedID, "switching away and back should not reshuffle")
     }
 
-    func testResetShuffleIsIgnoredWhilePlaying() throws {
+    func testShuffleToggleKeepsCurrentTrackPlaying() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
         let playlist = try makePlaylist(soundCount: 3, in: store)
         let audioManager = AudioPlayerManager()
@@ -103,46 +103,45 @@ final class MusicPlayerStoreTests: XCTestCase {
         musicPlayer.selectedFolderID = playlist.tabs[0].id
         let playingSoundID = try XCTUnwrap(musicPlayer.currentSoundID)
         musicPlayer.togglePlayPause()
-        XCTAssertTrue(musicPlayer.isPlaying)
 
-        musicPlayer.resetShuffle()
+        musicPlayer.toggleShuffle()
 
+        XCTAssertTrue(musicPlayer.isShuffled)
         XCTAssertTrue(musicPlayer.isPlaying)
         XCTAssertEqual(musicPlayer.currentSoundID, playingSoundID)
         XCTAssertEqual(audioManager.state(for: playingSoundID), .playing)
     }
 
-    func testResetShuffleCuesTrackWhilePaused() throws {
+    func testRestartFromFirstTrackCuesFirstSoundWhilePaused() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
         let playlist = try makePlaylist(soundCount: 3, in: store)
-        let audioManager = AudioPlayerManager()
-        let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager)
+        let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: AudioPlayerManager())
 
         musicPlayer.selectedFolderID = playlist.tabs[0].id
-        musicPlayer.resetShuffle()
+        let firstSoundID = try XCTUnwrap(musicPlayer.currentSoundID)
+        musicPlayer.skipToNext()
+        musicPlayer.restartFromFirstTrack()
 
         XCTAssertFalse(musicPlayer.isPlaying)
-        XCTAssertNotNil(musicPlayer.currentSoundID)
+        XCTAssertEqual(musicPlayer.currentSoundID, firstSoundID)
     }
 
-    func testCrossFadeAdvancesToNextTrackBeforeCurrentOneNaturallyEnds() throws {
+    func testTrackFinishingOnItsOwnCuesNextWithoutPlaying() throws {
         let store = PlaylistStore(baseDirectory: tempDirectory)
-        let playlist = try makePlaylist(soundCount: 2, seconds: 1.0, in: store)
+        let playlist = try makePlaylist(soundCount: 2, seconds: 0.2, in: store)
         let audioManager = AudioPlayerManager()
-        audioManager.crossFadeDuration = 0.3
         let musicPlayer = MusicPlayerStore(playlistStore: store, audioPlayerManager: audioManager)
 
         musicPlayer.selectedFolderID = playlist.tabs[0].id
         let firstSoundID = try XCTUnwrap(musicPlayer.currentSoundID)
-        musicPlayer.togglePlayPause() // starts the ~1s-long first track
+        musicPlayer.togglePlayPause()
 
-        // The crossfade is timed to start at (duration - crossFadeDuration) ≈ 0.9s in, well
-        // before the file's own ~1s runs out, so by 1.1s it should already be onto the next track.
-        let expectation = expectation(description: "crossfaded to next track")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) { expectation.fulfill() }
-        wait(for: [expectation], timeout: 3)
+        let deadline = Date().addingTimeInterval(5)
+        while musicPlayer.isPlaying, Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
 
-        XCTAssertTrue(musicPlayer.isPlaying)
+        XCTAssertFalse(musicPlayer.isPlaying)
         XCTAssertNotEqual(musicPlayer.currentSoundID, firstSoundID)
         XCTAssertEqual(audioManager.state(for: firstSoundID), .played)
     }

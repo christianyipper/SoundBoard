@@ -18,6 +18,17 @@ final class MicrophoneManager: ObservableObject {
     private var selectedDeviceUID: String?
     private var cancellables = Set<AnyCancellable>()
     private var configurationObserver: NSObjectProtocol?
+    /// Pending debounced restart. Device changes fire several notifications (CoreAudio default-output
+    /// listener plus AVAudioEngineConfigurationChange) while formats are still in flux, so restarts
+    /// are coalesced and delayed until the hardware settles.
+    private var pendingRestart: DispatchWorkItem?
+    private var startRetriesRemaining = 0
+    private static let restartDelay: TimeInterval = 0.3
+    private static let maxStartRetries = 5
+    /// Fixed boost applied before the volume slider. Raw mic level at unity gain is far too quiet
+    /// next to the sound effects, so 100% on the slider means +8 dB; the peak limiter applying it
+    /// catches loud bursts (shouting, mic bumps) instead of letting them clip the speakers.
+    private static let boostDecibels: AudioUnitParameterValue = 8
     private var defaultOutputListener: AudioObjectPropertyListenerBlock?
     private var defaultOutputAddress = AudioObjectPropertyAddress(
         mSelector: kAudioHardwarePropertyDefaultOutputDevice,
@@ -116,13 +127,29 @@ final class MicrophoneManager: ObservableObject {
             )
         }
 
-        let format = input.inputFormat(forBus: 0)
-        guard format.channelCount > 0 else { return }
-        engine.connect(input, to: engine.mainMixerNode, format: format)
+        // connect(_:to:format:) raises an uncatchable Objective-C exception if the input format
+        // doesn't match the hardware (e.g. mid-switch to a Bluetooth headset's mic profile), so
+        // validate first and retry shortly instead of crashing.
+        let hardwareFormat = input.inputFormat(forBus: 0)
+        let format = input.outputFormat(forBus: 0)
+        guard hardwareFormat.channelCount > 0, hardwareFormat.sampleRate > 0,
+              format.channelCount > 0, format.sampleRate == hardwareFormat.sampleRate
+        else {
+            retryStartIfNeeded()
+            return
+        }
+        let limiter = Self.makeBoostLimiter()
+        engine.attach(limiter)
+        engine.connect(input, to: limiter, format: format)
+        engine.connect(limiter, to: engine.mainMixerNode, format: format)
         engine.mainMixerNode.outputVolume = volume
 
         engine.prepare()
-        guard (try? engine.start()) != nil else { return }
+        guard (try? engine.start()) != nil else {
+            retryStartIfNeeded()
+            return
+        }
+        startRetriesRemaining = 0
 
         // The engine stops itself when its input or output device is reconfigured (e.g. a
         // Bluetooth device connecting, or a sample-rate change); rebuild it so the mic stays live.
@@ -138,6 +165,9 @@ final class MicrophoneManager: ObservableObject {
     }
 
     private func stop() {
+        pendingRestart?.cancel()
+        pendingRestart = nil
+        startRetriesRemaining = 0
         if let configurationObserver {
             NotificationCenter.default.removeObserver(configurationObserver)
         }
@@ -150,7 +180,38 @@ final class MicrophoneManager: ObservableObject {
     private func restartIfLive() {
         guard isLive else { return }
         stop()
-        startEngine()
+        startRetriesRemaining = Self.maxStartRetries
+        scheduleStart()
+    }
+
+    /// Used when a restart's engine couldn't be started because the device was still reconfiguring.
+    /// Only retries restarts; a failed fresh start from the hotkey just leaves the mic off.
+    private func retryStartIfNeeded() {
+        guard startRetriesRemaining > 0 else { return }
+        startRetriesRemaining -= 1
+        scheduleStart()
+    }
+
+    private func scheduleStart() {
+        pendingRestart?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.pendingRestart = nil
+            self?.startEngine()
+        }
+        pendingRestart = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.restartDelay, execute: work)
+    }
+
+    private static func makeBoostLimiter() -> AVAudioUnitEffect {
+        let limiter = AVAudioUnitEffect(audioComponentDescription: AudioComponentDescription(
+            componentType: kAudioUnitType_Effect,
+            componentSubType: kAudioUnitSubType_PeakLimiter,
+            componentManufacturer: kAudioUnitManufacturer_Apple,
+            componentFlags: 0,
+            componentFlagsMask: 0
+        ))
+        AudioUnitSetParameter(limiter.audioUnit, kLimiterParam_PreGain, kAudioUnitScope_Global, 0, boostDecibels, 0)
+        return limiter
     }
 
     // MARK: - CoreAudio device enumeration

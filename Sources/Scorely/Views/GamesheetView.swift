@@ -205,12 +205,12 @@ struct GamesheetView: View {
     }
 
     /// A side's penalty rows, or — while a row on the other side is selected — the infraction
-    /// buttons for that row, slid in over this column as in the ScoreCard app.
+    /// buttons for that row, faded in over this column.
     @ViewBuilder
     private func penaltyColumn(for side: TeamSide) -> some View {
         if gameStore.activePenaltyRow?.side == side.opposite {
             PenaltyPicker(activeSide: side.opposite)
-                .transition(.move(edge: side == .home ? .leading : .trailing).combined(with: .opacity))
+                .transition(.opacity)
         } else {
             PenaltyPanel(side: side, focus: $focus)
         }
@@ -319,6 +319,9 @@ struct GamesheetTextField: View {
     let accent: Color
     var font: Font = .system(size: 18, weight: .bold, design: .rounded).monospacedDigit()
     var height: CGFloat = 36
+    /// Runs on Return before moving to `field.next`; returning true (e.g. it submitted the
+    /// section) skips that move and ends editing instead.
+    var onReturn: (() -> Bool)? = nil
 
     private var isFocused: Bool { focus.wrappedValue == field }
 
@@ -328,7 +331,9 @@ struct GamesheetTextField: View {
             .font(font)
             .multilineTextAlignment(.center)
             .focused(focus, equals: field)
-            .onSubmit { focus.wrappedValue = field.next }
+            .onSubmit {
+                focus.wrappedValue = onReturn?() == true ? nil : field.next
+            }
             .onChange(of: isFocused) { _, focused in
                 guard focused else { return }
                 // A click places the caret after the field editor's mouse tracking, so select all
@@ -746,10 +751,25 @@ private struct TeamPanel: View {
                 ),
                 field: .goal(side, slot),
                 focus: focus,
-                accent: side.accent
+                accent: side.accent,
+                onReturn: { submitGoalOnReturn(from: slot) }
             )
             PlayerCaption(number: value, side: side, showsSeasonGoals: showsSeasonGoals)
         }
+    }
+
+    /// Return adds the goal once it has a type and scorer, but only from an assist box that's
+    /// empty (no more assists to type) or the last one; otherwise it moves on to the next assist.
+    private func submitGoalOnReturn(from slot: GamesheetField.GoalSlot) -> Bool {
+        guard gameStore.canSubmitGoal(for: side) else { return false }
+        let draft = gameStore.goalDraft(for: side)
+        switch slot {
+        case .scorer: return false
+        case .assist1: guard draft.assist1.isEmpty else { return false }
+        case .assist2: break
+        }
+        gameStore.submitGoal(for: side, league: rosterStore.league)
+        return true
     }
 }
 
@@ -973,7 +993,8 @@ private struct PenaltyPanel: View {
                 ),
                 field: .penaltyNumber(side, index),
                 focus: focus,
-                accent: side.accent
+                accent: side.accent,
+                onReturn: { submitPenaltiesOnReturn(from: index) }
             )
             .frame(width: 64)
             .help("Penalized player's number")
@@ -986,7 +1007,8 @@ private struct PenaltyPanel: View {
                 ),
                 field: .servedBy(side, index),
                 focus: focus,
-                accent: side.accent
+                accent: side.accent,
+                onReturn: { submitPenaltiesOnReturn(from: index) }
             )
             .frame(width: 56)
             .help("Number of the player serving the penalty (optional)")
@@ -997,6 +1019,14 @@ private struct PenaltyPanel: View {
             RoundedRectangle(cornerRadius: DesignSystem.Radius.small)
                 .strokeBorder(side.accent, lineWidth: isActive ? 2 : 0)
         )
+    }
+
+    /// Return submits the side's penalties once this row has an infraction, type and number
+    /// (served-by is optional); otherwise it moves on as usual.
+    private func submitPenaltiesOnReturn(from index: Int) -> Bool {
+        guard gameStore.penaltyRows(for: side)[index].isComplete else { return false }
+        gameStore.submitPenalties(for: side)
+        return true
     }
 
     private func rowValue(_ value: String?, placeholder: String) -> some View {
